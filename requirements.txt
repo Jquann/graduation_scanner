@@ -1,0 +1,29 @@
+# Core dependencies for Graduation Scanner
+
+# Computer Vision and Image Processing
+opencv-python>=4.8.0
+opencv-contrib-python>=4.8.0
+Pillow>=10.0.0
+
+# Face Recognition
+insightface>=0.7.3
+onnxruntime>=1.15.0
+
+# Scientific Computing
+numpy>=1.24.0
+
+# QR Code Processing
+qrcode>=7.4.2
+pyzbar>=0.1.9
+# Note: pyzbar requires zbar library to be installed on system
+# Ubuntu/Debian: sudo apt-get install libzbar0
+# macOS: brew install zbar
+# Windows: Download from http://zbar.sourceforge.net/download.html
+
+# Optional for Text-to-Speech announcements
+# pyttsx3>=2.90
+
+# Development dependencies (optional)
+# pytest>=7.4.0
+# black>=23.0.0
+# pylint>=2.17.0
