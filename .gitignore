@@ -1,0 +1,8 @@
+# Python
+__pycache__/
+venv/
+
+# Generated files
+graduation_data/photos/*
+graduation_data/qrcodes/*
+graduation_data/students_data.json
