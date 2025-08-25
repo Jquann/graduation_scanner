@@ -11,6 +11,13 @@ from PIL import Image, ImageTk
 from datetime import datetime
 import json
 import csv
+import re
+import zipfile
+import shutil
+import tempfile
+import pandas as pd
+# from database import Database
+from pathlib import Path
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -703,7 +710,7 @@ class ManagementTab:
                 subprocess.run(["xdg-open", os.path.dirname(file_path)])
         except Exception as e:
             messagebox.showerror("Error", f"Cannot open file location: {e}")
-    
+
     def save_qr_for_printing(self, student):
         """Save QR code in print-ready format"""
         qr_path = student.get("qr_code_path", "")
@@ -711,9 +718,21 @@ class ManagementTab:
             messagebox.showerror("Error", "QR code file not found")
             return
         
-        # Ask user for save location
+        # Create default filename using student info
+        student_id = student.get('student_id', 'Unknown')
+        student_name = student.get('name', 'Unknown')
+        
+        # Clean the name for filename (remove special characters)
+        clean_name = re.sub(r'[<>:"/\\|?*]', '', student_name)  # Remove invalid filename characters
+        clean_name = clean_name.replace(' ', '_')  # Replace spaces with underscores
+        
+        # Create default filename
+        default_filename = f"QR_Code_{student_id}_{clean_name}.png"
+        
+        # Ask user for save location with default filename
         save_path = filedialog.asksaveasfilename(
             title=f"Save QR Code for {student.get('name', 'Unknown')}",
+            initialfile=default_filename,  # This sets the default filename
             defaultextension=".png",
             filetypes=[("PNG files", "*.png"), ("All files", "*.*")]
         )
@@ -770,7 +789,7 @@ class ManagementTab:
                 
             except Exception as e:
                 messagebox.showerror("Error", f"Error saving QR code: {e}")
-    
+                
     def edit_student(self):
         """Edit selected student information"""
         student = self.get_selected_student()
@@ -1052,9 +1071,9 @@ class ManagementTab:
             
         except Exception as e:
             ttk.Label(qr_window, text=f"Error loading QR code: {e}").pack(pady=50)
-    
+
     def export_data(self):
-        """Export student data to various formats"""
+        """Export student data with graduation_data folder"""
         if not self.filtered_students:
             messagebox.showwarning("Warning", "No student data to export")
             return
@@ -1062,7 +1081,7 @@ class ManagementTab:
         # Create export options window
         export_window = tk.Toplevel(self.frame)
         export_window.title("Export Student Data")
-        export_window.geometry("400x320")
+        export_window.geometry("450x400")
         export_window.resizable(False, False)
         
         # Make modal
@@ -1073,33 +1092,40 @@ class ManagementTab:
         format_frame = ttk.LabelFrame(export_window, text="Export Format")
         format_frame.pack(fill='x', padx=10, pady=10)
         
-        format_var = tk.StringVar(value="csv")
+        format_var = tk.StringVar(value="zip_full")
         
-        ttk.Radiobutton(format_frame, text="CSV (Comma Separated Values)", 
-                       variable=format_var, value="csv").pack(anchor='w', padx=10, pady=5)
-        ttk.Radiobutton(format_frame, text="JSON (JavaScript Object Notation)", 
-                       variable=format_var, value="json").pack(anchor='w', padx=10, pady=5)
-        ttk.Radiobutton(format_frame, text="Excel Spreadsheet (.xlsx)", 
-                       variable=format_var, value="xlsx").pack(anchor='w', padx=10, pady=5)
+        # ttk.Radiobutton(format_frame, text="Complete Backup (ZIP with all files)", 
+        #             variable=format_var, value="zip_full").pack(anchor='w', padx=10, pady=5)
+        ttk.Radiobutton(format_frame, text="Data Only - CSV", 
+                    variable=format_var, value="csv").pack(anchor='w', padx=10, pady=5)
+        ttk.Radiobutton(format_frame, text="Data Only - JSON", 
+                    variable=format_var, value="json").pack(anchor='w', padx=10, pady=5)
+        ttk.Radiobutton(format_frame, text="Data Only - Excel (.xlsx)", 
+                    variable=format_var, value="xlsx").pack(anchor='w', padx=10, pady=5)
         
-        # Data selection
-        data_frame = ttk.LabelFrame(export_window, text="Data to Export")
+        # Data selection for non-ZIP exports
+        data_frame = ttk.LabelFrame(export_window, text="Data Options (for non-ZIP exports)")
         data_frame.pack(fill='x', padx=10, pady=10)
         
-        include_photos_var = tk.BooleanVar(value=False)
+        include_paths_var = tk.BooleanVar(value=False)
         include_technical_var = tk.BooleanVar(value=False)
         
         ttk.Checkbutton(data_frame, text="Include file paths", 
-                       variable=include_photos_var).pack(anchor='w', padx=10, pady=5)
+                    variable=include_paths_var).pack(anchor='w', padx=10, pady=5)
         ttk.Checkbutton(data_frame, text="Include technical data (face encodings)", 
-                       variable=include_technical_var).pack(anchor='w', padx=10, pady=5)
+                    variable=include_technical_var).pack(anchor='w', padx=10, pady=5)
         
         # Export info
         info_frame = ttk.Frame(export_window)
         info_frame.pack(fill='x', padx=10, pady=10)
         
         ttk.Label(info_frame, text=f"Students to export: {len(self.filtered_students)}", 
-                 font=('Arial', 10, 'bold')).pack()
+                font=('Arial', 10, 'bold')).pack()
+        
+        # Description label
+        # desc_text = "ZIP export includes all photos, QR codes, and database files"
+        # ttk.Label(info_frame, text=desc_text, 
+        #         font=('Arial', 9), foreground='blue').pack(pady=5)
         
         # Buttons
         button_frame = ttk.Frame(export_window)
@@ -1107,25 +1133,37 @@ class ManagementTab:
         
         def perform_export():
             export_format = format_var.get()
-            include_paths = include_photos_var.get()
+            include_paths = include_paths_var.get()
             include_technical = include_technical_var.get()
             
-            # Get save location
-            file_types = {
-                "csv": [("CSV files", "*.csv")],
-                "json": [("JSON files", "*.json")],
-                "xlsx": [("Excel files", "*.xlsx")]
-            }
-            
-            save_path = filedialog.asksaveasfilename(
-                title="Export Student Data",
-                filetypes=file_types[export_format] + [("All files", "*.*")],
-                defaultextension=f".{export_format}"
-            )
+            if export_format == "zip_full":
+                # ZIP export
+                save_path = filedialog.asksaveasfilename(
+                    title="Export Complete Backup",
+                    filetypes=[("ZIP files", "*.zip"), ("All files", "*.*")],
+                    defaultextension=".zip"
+                )
+            else:
+                # Data-only export
+                file_types = {
+                    "csv": [("CSV files", "*.csv")],
+                    "json": [("JSON files", "*.json")],
+                    "xlsx": [("Excel files", "*.xlsx")]
+                }
+                
+                save_path = filedialog.asksaveasfilename(
+                    title="Export Student Data",
+                    filetypes=file_types[export_format] + [("All files", "*.*")],
+                    defaultextension=f".{export_format}"
+                )
             
             if save_path:
                 try:
-                    self.perform_data_export(save_path, export_format, include_paths, include_technical)
+                    if export_format == "zip_full":
+                        self.export_complete_backup(save_path)
+                    else:
+                        self.perform_data_export(save_path, export_format, include_paths, include_technical)
+                    
                     export_window.destroy()
                     messagebox.showinfo("Success", f"Data exported successfully to:\n{save_path}")
                 except Exception as e:
@@ -1133,7 +1171,83 @@ class ManagementTab:
         
         ttk.Button(button_frame, text="📤 Export", command=perform_export).pack(side='right', padx=5)
         ttk.Button(button_frame, text="❌ Cancel", command=export_window.destroy).pack(side='right', padx=5)
+
     
+    def export_complete_backup(self, zip_path):
+        """Export complete backup including graduation_data folder - FIXED VERSION"""
+        graduation_data_path = Path("graduation_data")
+        
+        if not graduation_data_path.exists():
+            raise FileNotFoundError("graduation_data folder not found")
+        
+        # Create progress window
+        progress_window = tk.Toplevel(self.frame)
+        progress_window.title("Exporting...")
+        progress_window.geometry("400x150")
+        progress_window.resizable(False, False)
+        progress_window.transient(self.frame)
+        progress_window.grab_set()
+        
+        progress_label = ttk.Label(progress_window, text="Preparing export...")
+        progress_label.pack(pady=20)
+        
+        progress_var = tk.DoubleVar()
+        progress_bar = ttk.Progressbar(progress_window, variable=progress_var, maximum=100)
+        progress_bar.pack(pady=10, padx=20, fill='x')
+        
+        progress_window.update()
+        
+        try:
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                # Get all files to zip
+                all_files = []
+                for root, dirs, files in os.walk(graduation_data_path):
+                    for file in files:
+                        file_path = Path(root) / file
+                        all_files.append(file_path)
+                
+                total_files = len(all_files)
+                
+                if total_files == 0:
+                    raise ValueError("No files found in graduation_data folder")
+                
+                processed_files = 0
+                
+                for file_path in all_files:
+                    # Update progress
+                    progress_label.config(text=f"Adding: {file_path.name}")
+                    progress_var.set((processed_files / total_files) * 100)
+                    progress_window.update()
+                    
+                    # Add file to zip with relative path from current directory
+                    # This ensures the zip contains "graduation_data/..." structure
+                    relative_path = file_path.relative_to(Path.cwd())
+                    zipf.write(file_path, relative_path)
+                    processed_files += 1
+                
+                # Add export metadata
+                metadata = {
+                    "export_timestamp": datetime.now().isoformat(),
+                    "total_students": len(self.database.get_all_students()),
+                    "export_type": "complete_backup",
+                    "version": "1.0",
+                    "application": "graduation_scanner"
+                }
+                
+                zipf.writestr("export_metadata.json", json.dumps(metadata, indent=2))
+                
+            progress_label.config(text="Export completed!")
+            progress_var.set(100)
+            progress_window.update()
+            
+            # Close progress window after a short delay
+            progress_window.after(1000, progress_window.destroy)
+            
+        except Exception as e:
+            progress_window.destroy()
+            raise e
+
+
     def perform_data_export(self, file_path, format_type, include_paths, include_technical):
         """Perform the actual data export"""
         # Prepare data
@@ -1248,7 +1362,408 @@ class ManagementTab:
         except ImportError:
             messagebox.showerror("Error", "openpyxl library not installed. Cannot export to Excel format.")
             raise
-    
+  
     def import_data(self):
         """Import student data from file"""
-        messagebox.showinfo("Import Data", "Import functionality will be implemented in a future update.")
+        # Create import options window
+        import_window = tk.Toplevel(self.frame)
+        import_window.title("Import Student Data")
+        import_window.geometry("500x480")
+        import_window.resizable(False, False)
+        
+        # Make modal
+        import_window.transient(self.frame)
+        import_window.grab_set()
+        
+        # Import format selection
+        format_frame = ttk.LabelFrame(import_window, text="Import Format")
+        format_frame.pack(fill='x', padx=10, pady=10)
+        
+        format_var = tk.StringVar(value="zip")
+        
+        # ttk.Radiobutton(format_frame, text="Complete Backup (ZIP file)", 
+        #             variable=format_var, value="zip").pack(anchor='w', padx=10, pady=5)
+        ttk.Radiobutton(format_frame, text="CSV Data File", 
+                    variable=format_var, value="csv").pack(anchor='w', padx=10, pady=5)
+        ttk.Radiobutton(format_frame, text="JSON Data File", 
+                    variable=format_var, value="json").pack(anchor='w', padx=10, pady=5)
+        
+        # Import options
+        options_frame = ttk.LabelFrame(import_window, text="Import Options")
+        options_frame.pack(fill='x', padx=10, pady=10)
+        
+        merge_var = tk.StringVar(value="merge")
+        
+        ttk.Radiobutton(options_frame, text="Merge with existing data (keep both)", 
+                    variable=merge_var, value="merge").pack(anchor='w', padx=10, pady=5)
+        ttk.Radiobutton(options_frame, text="Replace existing data (backup current first)", 
+                    variable=merge_var, value="replace").pack(anchor='w', padx=10, pady=5)
+        
+        # Import validation options
+        validation_frame = ttk.LabelFrame(import_window, text="Validation Options")
+        validation_frame.pack(fill='x', padx=10, pady=10)
+        
+        skip_duplicates_var = tk.BooleanVar(value=True)
+        validate_data_var = tk.BooleanVar(value=True)
+        
+        ttk.Checkbutton(validation_frame, text="Skip duplicate student IDs", 
+                    variable=skip_duplicates_var).pack(anchor='w', padx=10, pady=5)
+        ttk.Checkbutton(validation_frame, text="Validate data format", 
+                    variable=validate_data_var).pack(anchor='w', padx=10, pady=5)
+        
+        # File selection
+        file_frame = ttk.Frame(import_window)
+        file_frame.pack(fill='x', padx=10, pady=10)
+        
+        file_path_var = tk.StringVar()
+        ttk.Label(file_frame, text="Selected file:").pack(anchor='w')
+        file_entry = ttk.Entry(file_frame, textvariable=file_path_var, width=50)
+        file_entry.pack(side='left', fill='x', expand=True, pady=5)
+        
+        def browse_file():
+            format_type = format_var.get()
+            file_types = {
+                "zip": [("ZIP files", "*.zip")],
+                "csv": [("CSV files", "*.csv")],
+                "json": [("JSON files", "*.json")]
+            }
+            
+            file_path = filedialog.askopenfilename(
+                title=f"Select {format_type.upper()} file to import",
+                filetypes=file_types[format_type] + [("All files", "*.*")]
+            )
+            
+            if file_path:
+                file_path_var.set(file_path)
+        
+        ttk.Button(file_frame, text="📁 Browse", command=browse_file).pack(side='right', padx=5)
+        
+        # Warning label
+        warning_frame = ttk.Frame(import_window)
+        warning_frame.pack(fill='x', padx=10, pady=5)
+        
+        warning_text = "⚠️ Warning: Import will modify your database. Consider backing up first."
+        ttk.Label(warning_frame, text=warning_text, 
+                font=('Arial', 9), foreground='red').pack()
+        
+        # Buttons
+        button_frame = ttk.Frame(import_window)
+        button_frame.pack(fill='x', padx=10, pady=10)
+        
+        def perform_import():
+            file_path = file_path_var.get().strip()
+            if not file_path:
+                messagebox.showerror("Error", "Please select a file to import")
+                return
+            
+            if not os.path.exists(file_path):
+                messagebox.showerror("Error", "Selected file does not exist")
+                return
+            
+            import_format = format_var.get()
+            merge_mode = merge_var.get()
+            skip_duplicates = skip_duplicates_var.get()
+            validate_data = validate_data_var.get()
+            
+            try:
+                if import_format == "zip":
+                    self.import_complete_backup(file_path, merge_mode)
+                elif import_format == "csv":
+                    self.import_csv_data(file_path, merge_mode, skip_duplicates, validate_data)
+                elif import_format == "json":
+                    self.import_json_data(file_path, merge_mode, skip_duplicates, validate_data)
+                
+                import_window.destroy()
+                self.refresh_student_list()
+                messagebox.showinfo("Success", "Data imported successfully!")
+                
+            except Exception as e:
+                messagebox.showerror("Error", f"Import failed: {e}")
+        
+        ttk.Button(button_frame, text="📥 Import", command=perform_import).pack(side='right', padx=5)
+        ttk.Button(button_frame, text="❌ Cancel", command=import_window.destroy).pack(side='right', padx=5)
+
+    def import_complete_backup(self, zip_path, merge_mode):
+        """Import complete backup from ZIP file - SIMPLIFIED VERSION"""
+        # Create backup of current data if replace mode
+        if merge_mode == "replace" and os.path.exists("graduation_data"):
+            backup_path = f"graduation_data_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+            try:
+                self.export_complete_backup(backup_path)
+                messagebox.showinfo("Backup Created", f"Current data backed up to: {backup_path}")
+            except Exception as e:
+                if not messagebox.askyesno("Warning", 
+                    f"Failed to create backup: {e}\n\nContinue with import anyway?"):
+                    return
+        
+        # Create progress window
+        progress_window = tk.Toplevel(self.frame)
+        progress_window.title("Importing...")
+        progress_window.geometry("400x150")
+        progress_window.resizable(False, False)
+        progress_window.transient(self.frame)
+        progress_window.grab_set()
+        
+        progress_label = ttk.Label(progress_window, text="Extracting backup...")
+        progress_label.pack(pady=20)
+        
+        progress_var = tk.DoubleVar()
+        progress_bar = ttk.Progressbar(progress_window, variable=progress_var, maximum=100)
+        progress_bar.pack(pady=10, padx=20, fill='x')
+        
+        progress_window.update()
+        
+        try:
+            # Validate ZIP file first
+            with zipfile.ZipFile(zip_path, 'r') as zipf:
+                file_list = zipf.namelist()
+                
+                # Check if this looks like a valid backup
+                has_graduation_data = any(f.startswith('graduation_data/') for f in file_list)
+                if not has_graduation_data:
+                    raise ValueError("Invalid backup file: No graduation_data folder found in ZIP")
+                
+                progress_label.config(text="Validating backup...")
+                progress_var.set(10)
+                progress_window.update()
+                
+                # If replace mode, remove existing graduation_data folder
+                if merge_mode == "replace" and os.path.exists("graduation_data"):
+                    progress_label.config(text="Removing existing data...")
+                    progress_var.set(20)
+                    progress_window.update()
+                    shutil.rmtree("graduation_data")
+                
+                # Extract files
+                progress_label.config(text="Extracting files...")
+                progress_var.set(30)
+                progress_window.update()
+                
+                total_files = len(file_list)
+                extracted_files = 0
+                
+                for file_name in file_list:
+                    # Skip metadata file and directories
+                    if file_name.endswith('/') or file_name == 'export_metadata.json':
+                        continue
+                    
+                    # Only extract graduation_data files
+                    if file_name.startswith('graduation_data/'):
+                        target_path = Path(file_name)
+                        
+                        # For merge mode, skip if file already exists
+                        if merge_mode == "merge" and target_path.exists():
+                            extracted_files += 1
+                            continue
+                        
+                        # Create parent directories
+                        target_path.parent.mkdir(parents=True, exist_ok=True)
+                        
+                        # Extract file
+                        with zipf.open(file_name) as source, open(target_path, 'wb') as target:
+                            shutil.copyfileobj(source, target)
+                    
+                    extracted_files += 1
+                    progress = 30 + (extracted_files / total_files) * 60
+                    progress_var.set(progress)
+                    progress_window.update()
+                
+                progress_label.config(text="Finalizing import...")
+                progress_var.set(95)
+                progress_window.update()
+                
+            # Refresh the current database connection to pick up imported data
+            progress_label.config(text="Refreshing database...")
+            self.refresh_student_list()  # This will reload data from files
+            
+            progress_var.set(100)
+            progress_label.config(text="Import completed!")
+            progress_window.update()
+            
+            progress_window.after(1500, progress_window.destroy)
+            
+        except Exception as e:
+            progress_window.destroy()
+            raise e
+
+    def validate_backup_file(self, zip_path):
+        """Validate that the ZIP file is a valid graduation scanner backup"""
+        try:
+            with zipfile.ZipFile(zip_path, 'r') as zipf:
+                file_list = zipf.namelist()
+                
+                # Check for required structure
+                has_graduation_data = any(f.startswith('graduation_data/') for f in file_list)
+                has_database_file = any('students_data.json' in f for f in file_list)
+                
+                return has_graduation_data and has_database_file
+        except:
+            return False
+            
+    def import_csv_data(self, csv_path, merge_mode, skip_duplicates, validate_data):
+        """Import student data from CSV file"""
+        try:
+            # Read CSV file
+            df = pd.read_csv(csv_path, encoding='utf-8')
+            
+            # Validate required columns
+            required_columns = ['student_id', 'name', 'faculty', 'graduation_level']
+            missing_columns = [col for col in required_columns if col not in df.columns]
+            
+            if missing_columns:
+                raise ValueError(f"Missing required columns: {', '.join(missing_columns)}")
+            
+            # Get existing students
+            existing_students = self.database.get_all_students()
+            existing_ids = {s.get('student_id') for s in existing_students}
+            
+            imported_count = 0
+            skipped_count = 0
+            errors = []
+            
+            for index, row in df.iterrows():
+                try:
+                    student_id = str(row['student_id']).strip()
+                    
+                    # Skip duplicates if option is enabled
+                    if skip_duplicates and student_id in existing_ids:
+                        skipped_count += 1
+                        continue
+                    
+                    # Validate data if option is enabled
+                    if validate_data:
+                        if not student_id or not str(row['name']).strip():
+                            errors.append(f"Row {index + 1}: Missing student ID or name")
+                            continue
+                    
+                    # Create student data
+                    student_data = {
+                        "student_id": student_id,
+                        "name": str(row['name']).strip(),
+                        "faculty": str(row['faculty']).strip(),
+                        "graduation_level": str(row['graduation_level']).strip(),
+                        "registered_time": datetime.now().isoformat(),
+                        "photo_path": "",
+                        "qr_code_path": "",
+                        "face_encoding": []
+                    }
+                    
+                    # Add optional columns if they exist
+                    if 'photo_path' in df.columns and pd.notna(row['photo_path']):
+                        student_data['photo_path'] = str(row['photo_path'])
+                    
+                    if 'qr_code_path' in df.columns and pd.notna(row['qr_code_path']):
+                        student_data['qr_code_path'] = str(row['qr_code_path'])
+                    
+                    if 'registration_date' in df.columns and pd.notna(row['registration_date']):
+                        student_data['registered_time'] = str(row['registration_date'])
+                    
+                    # Save student
+                    self.database.add_student(student_data)
+                    imported_count += 1
+                    existing_ids.add(student_id)
+                    
+                except Exception as e:
+                    errors.append(f"Row {index + 1}: {str(e)}")
+            
+            # Show import summary
+            summary = f"Import completed!\n\nImported: {imported_count} students"
+            if skipped_count > 0:
+                summary += f"\nSkipped (duplicates): {skipped_count}"
+            if errors:
+                summary += f"\nErrors: {len(errors)}"
+                if len(errors) <= 5:
+                    summary += "\n\nErrors:\n" + "\n".join(errors)
+                else:
+                    summary += f"\n\nFirst 5 errors:\n" + "\n".join(errors[:5])
+            
+            messagebox.showinfo("Import Summary", summary)
+            
+        except Exception as e:
+            raise Exception(f"CSV import error: {str(e)}")
+
+    def import_json_data(self, json_path, merge_mode, skip_duplicates, validate_data):
+        """Import student data from JSON file"""
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            # Handle different JSON structures
+            if isinstance(data, dict):
+                if 'students' in data:
+                    students_data = data['students']
+                elif 'data' in data:
+                    students_data = data['data']
+                else:
+                    students_data = [data]  # Single student
+            elif isinstance(data, list):
+                students_data = data
+            else:
+                raise ValueError("Invalid JSON format")
+            
+            # Get existing students
+            existing_students = self.database.get_all_students()
+            existing_ids = {s.get('student_id') for s in existing_students}
+            
+            imported_count = 0
+            skipped_count = 0
+            errors = []
+            
+            for i, student_data in enumerate(students_data):
+                try:
+                    if not isinstance(student_data, dict):
+                        errors.append(f"Student {i + 1}: Invalid data format")
+                        continue
+                    
+                    student_id = str(student_data.get('student_id', '')).strip()
+                    
+                    # Skip duplicates if option is enabled
+                    if skip_duplicates and student_id in existing_ids:
+                        skipped_count += 1
+                        continue
+                    
+                    # Validate required fields
+                    required_fields = ['student_id', 'name', 'faculty', 'graduation_level']
+                    if validate_data:
+                        missing_fields = [field for field in required_fields 
+                                        if not student_data.get(field, '').strip()]
+                        if missing_fields:
+                            errors.append(f"Student {i + 1}: Missing fields: {', '.join(missing_fields)}")
+                            continue
+                    
+                    # Ensure all required fields exist
+                    processed_student = {
+                        "student_id": student_id,
+                        "name": str(student_data.get('name', '')).strip(),
+                        "faculty": str(student_data.get('faculty', '')).strip(),
+                        "graduation_level": str(student_data.get('graduation_level', '')).strip(),
+                        "registered_time": student_data.get('registered_time') or student_data.get('registration_date') or datetime.now().isoformat(),
+                        "photo_path": student_data.get('photo_path', ''),
+                        "qr_code_path": student_data.get('qr_code_path', ''),
+                        "face_encoding": student_data.get('face_encoding', [])
+                    }
+                    
+                    # Save student
+                    self.database.add_student(processed_student)
+                    imported_count += 1
+                    existing_ids.add(student_id)
+                    
+                except Exception as e:
+                    errors.append(f"Student {i + 1}: {str(e)}")
+            
+            # Show import summary
+            summary = f"Import completed!\n\nImported: {imported_count} students"
+            if skipped_count > 0:
+                summary += f"\nSkipped (duplicates): {skipped_count}"
+            if errors:
+                summary += f"\nErrors: {len(errors)}"
+                if len(errors) <= 5:
+                    summary += "\n\nErrors:\n" + "\n".join(errors)
+                else:
+                    summary += f"\n\nFirst 5 errors:\n" + "\n".join(errors[:5])
+            
+            messagebox.showinfo("Import Summary", summary)
+            
+        except Exception as e:
+            raise Exception(f"JSON import error: {str(e)}")
+        
