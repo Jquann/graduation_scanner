@@ -428,7 +428,7 @@ class ScanningTab:
     
     def update_visual_feedback_for_new_qr(self, qr_data):
         """Update visual feedback when new QR is loaded"""
-        student_info = self.database.get_student_by_id(qr_data)
+        student_info = self.database.find_student_by_id(qr_data)
         if student_info:
             name = student_info.get('name', 'Unknown')
             faculty = student_info.get('faculty', 'Unknown')

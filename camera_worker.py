@@ -164,7 +164,6 @@ class CameraWorker:
             
             time.sleep(0.01)
         
-        self.cap.release()
     
     def _async_face_detection(self, frame: np.ndarray, timestamp: float):
         """Perform asynchronous face detection"""

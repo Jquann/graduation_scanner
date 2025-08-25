@@ -21,7 +21,7 @@ pyzbar>=0.1.9
 # Windows: Download from http://zbar.sourceforge.net/download.html
 
 # Optional for Text-to-Speech announcements
-# pyttsx3>=2.90
+pyttsx3>=2.90
 
 # Development dependencies (optional)
 # pytest>=7.4.0
