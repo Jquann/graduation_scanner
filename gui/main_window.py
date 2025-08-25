@@ -48,6 +48,7 @@ class GraduationScannerApp:
     def setup_gui(self):
         """Setup main GUI window"""
         self.root = tk.Tk()
+        self.root.state('zoomed')
         self.root.title(Config.APP_NAME)
         self.root.geometry(f"{Config.WINDOW_WIDTH}x{Config.WINDOW_HEIGHT}")
         
@@ -101,16 +102,16 @@ class GraduationScannerApp:
         # File menu
         file_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="File", menu=file_menu)
-        file_menu.add_command(label="Backup Database", command=self.backup_database)
-        file_menu.add_command(label="Restore Database", command=self.restore_database)
-        file_menu.add_separator()
+        # file_menu.add_command(label="Backup Database", command=self.backup_database)
+        # file_menu.add_command(label="Restore Database", command=self.restore_database)
+        # file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.on_closing)
         
         # Tools menu
-        tools_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="Tools", menu=tools_menu)
-        tools_menu.add_command(label="Performance Settings", command=self.show_performance_settings)
-        tools_menu.add_command(label="Camera Settings", command=self.show_camera_settings)
+        # tools_menu = tk.Menu(menubar, tearoff=0)
+        # menubar.add_cascade(label="Tools", menu=tools_menu)
+        # tools_menu.add_command(label="Performance Settings", command=self.show_performance_settings)
+        # tools_menu.add_command(label="Camera Settings", command=self.show_camera_settings)
         
         # Help menu
         help_menu = tk.Menu(menubar, tearoff=0)

@@ -226,7 +226,7 @@ class PhotoCaptureWindow:
         # Create window
         self.window = tk.Toplevel(parent)
         self.window.title("📷 Take Student Photo")
-        self.window.geometry("700x600")
+        self.window.geometry("700x630")
         self.window.configure(bg='lightgray')
         
         # Make modal

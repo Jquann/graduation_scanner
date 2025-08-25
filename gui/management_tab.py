@@ -220,11 +220,11 @@ class ManagementTab:
             command=self.import_data
         ).pack(side='left', padx=5)
         
-        ttk.Button(
-            button_frame, 
-            text="💾 Backup Database", 
-            command=self.backup_database
-        ).pack(side='left', padx=5)
+        # ttk.Button(
+        #     button_frame, 
+        #     text="💾 Backup Database", 
+        #     command=self.backup_database
+        # ).pack(side='left', padx=5)
         
         # Statistics frame
         stats_frame = ttk.LabelFrame(self.frame, text="📊 Statistics")
@@ -1062,7 +1062,7 @@ class ManagementTab:
         # Create export options window
         export_window = tk.Toplevel(self.frame)
         export_window.title("Export Student Data")
-        export_window.geometry("400x300")
+        export_window.geometry("400x320")
         export_window.resizable(False, False)
         
         # Make modal
@@ -1252,62 +1252,3 @@ class ManagementTab:
     def import_data(self):
         """Import student data from file"""
         messagebox.showinfo("Import Data", "Import functionality will be implemented in a future update.")
-    
-    def backup_database(self):
-        """Create a backup of the database"""
-        try:
-            import shutil
-            from pathlib import Path
-            
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            backup_name = f"graduation_data_backup_{timestamp}.json"
-            
-            save_path = filedialog.asksaveasfilename(
-                title="Save Database Backup",
-                defaultextension=".json",
-                initialname=backup_name,
-                filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
-            )
-            
-            if save_path:
-                # Copy the database file
-                shutil.copy2(self.database.data_file, save_path)
-                
-                # Also create a summary file
-                summary_path = save_path.replace('.json', '_summary.txt')
-                with open(summary_path, 'w', encoding='utf-8') as f:
-                    f.write(f"Graduation Scanner Database Backup\n")
-                    f.write(f"=" * 40 + "\n")
-                    f.write(f"Backup Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                    f.write(f"Total Students: {len(self.database.get_all_students())}\n")
-                    f.write(f"Database File: {self.database.data_file}\n")
-                    f.write(f"Backup File: {save_path}\n")
-                    f.write(f"\nStudent List:\n")
-                    f.write(f"-" * 40 + "\n")
-                    
-                    for student in self.database.get_all_students():
-                        f.write(f"ID: {student.get('student_id', 'N/A')}, ")
-                        f.write(f"Name: {student.get('name', 'N/A')}, ")
-                        f.write(f"Faculty: {student.get('faculty', 'N/A')}\n")
-                
-                messagebox.showinfo("Success", 
-                                  f"Database backup created successfully!\n\n"
-                                  f"Backup file: {os.path.basename(save_path)}\n"
-                                  f"Summary file: {os.path.basename(summary_path)}")
-                
-        except Exception as e:
-            messagebox.showerror("Error", f"Backup failed: {e}")
-
-
-# Optional: Add additional utility functions if needed
-def format_file_size(size_bytes):
-    """Format file size in human readable format"""
-    if size_bytes == 0:
-        return "0 B"
-    
-    size_names = ["B", "KB", "MB", "GB"]
-    import math
-    i = int(math.floor(math.log(size_bytes, 1024)))
-    p = math.pow(1024, i)
-    s = round(size_bytes / p, 2)
-    return f"{s} {size_names[i]}"
