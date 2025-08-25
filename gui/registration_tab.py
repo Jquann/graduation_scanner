@@ -7,6 +7,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import cv2
 import os
+import re
 from datetime import datetime
 from PIL import Image, ImageTk
 
@@ -36,6 +37,16 @@ class RegistrationTab:
         
         self.setup_ui()
     
+    def validate_student_id(self, student_id):
+        """
+        Validate student ID format: 11AAA11111
+        - 2 digits
+        - 3 uppercase letters  
+        - 5 digits
+        """
+        pattern = r'^[0-9]{2}[A-Z]{3}[0-9]{5}$'
+        return re.match(pattern, student_id) is not None
+    
     def setup_ui(self):
         """Setup registration UI"""
         # Left side: Form
@@ -46,6 +57,11 @@ class RegistrationTab:
         ttk.Label(form_frame, text="Student ID:").grid(row=0, column=0, sticky='w', padx=5, pady=5)
         id_entry = ttk.Entry(form_frame, textvariable=self.student_id_var, width=30)
         id_entry.grid(row=0, column=1, padx=5, pady=5)
+        
+        # Add format hint for student ID
+        id_hint = ttk.Label(form_frame, text="Format: 11AAA11111 (2 digits + 3 letters + 5 digits)", 
+                           foreground="gray", font=('Arial', 8))
+        id_hint.grid(row=0, column=2, padx=5, pady=5, sticky='w')
         
         # Name
         ttk.Label(form_frame, text="Full Name:").grid(row=1, column=0, sticky='w', padx=5, pady=5)
@@ -129,10 +145,19 @@ class RegistrationTab:
             except Exception as e:
                 print(f"Error previewing photo: {e}")
     
+    def cleanup_temp_file(self, file_path):
+        """Clean up temporary file"""
+        try:
+            if file_path and os.path.exists(file_path) and file_path.startswith('temp_'):
+                os.remove(file_path)
+                print(f"Cleaned up temporary file: {file_path}")
+        except Exception as e:
+            print(f"Warning: Could not clean up temporary file {file_path}: {e}")
+    
     def register_student(self):
         """Register new student"""
         # Validate input
-        student_id = self.student_id_var.get().strip()
+        student_id = self.student_id_var.get().strip().upper()  # Convert to uppercase
         student_name = self.student_name_var.get().strip()
         faculty = self.faculty_var.get().strip()
         graduation_level = self.graduation_level_var.get().strip()
@@ -141,16 +166,32 @@ class RegistrationTab:
             messagebox.showerror("Error", "Please fill in all required information")
             return
         
+        # Validate student ID format
+        if not self.validate_student_id(student_id):
+            messagebox.showerror("Error", 
+                               "Invalid Student ID format!\n\n" +
+                               "Required format: 11AAA11111\n" +
+                               "Example: 22CSC12345\n\n" +
+                               "• 2 digits (year/batch)\n" +
+                               "• 3 uppercase letters (program code)\n" +
+                               "• 5 digits (sequential number)")
+            return
+        
         if not self.photo_path or not os.path.exists(self.photo_path):
             messagebox.showerror("Error", "Please select or take a student photo")
             return
         
         # Check if student ID already exists
         if self.database.find_student_by_id(student_id):
-            messagebox.showerror("Error", "Student ID already exists")
+            messagebox.showerror("Error", f"Student ID '{student_id}' already exists!\nPlease use a different ID.")
             return
         
+        temp_file_to_cleanup = None
         try:
+            # Check if this is a temporary captured photo
+            if self.photo_path and self.photo_path.startswith('temp_'):
+                temp_file_to_cleanup = self.photo_path
+            
             # Process face image
             image = cv2.imread(self.photo_path)
             image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -186,7 +227,12 @@ class RegistrationTab:
             
             # Save to database
             if self.database.add_student(student):
-                messagebox.showinfo("Success", f"Student {student_name} registered successfully!")
+                # Success - clean up temporary file if it exists
+                if temp_file_to_cleanup:
+                    self.cleanup_temp_file(temp_file_to_cleanup)
+                
+                messagebox.showinfo("Success", 
+                                  f"Student {student_name} (ID: {student_id}) registered successfully!")
                 self.clear_form()
                 
                 # Update parent window status if available
@@ -199,9 +245,17 @@ class RegistrationTab:
                 
         except Exception as e:
             messagebox.showerror("Error", f"Error registering student: {str(e)}")
+        finally:
+            # Clean up temporary file even if registration failed
+            if temp_file_to_cleanup:
+                self.cleanup_temp_file(temp_file_to_cleanup)
     
     def clear_form(self):
         """Clear all form fields"""
+        # Clean up temporary file if exists
+        if self.photo_path and self.photo_path.startswith('temp_'):
+            self.cleanup_temp_file(self.photo_path)
+        
         self.student_id_var.set("")
         self.student_name_var.set("")
         self.faculty_var.set("")
@@ -232,6 +286,9 @@ class PhotoCaptureWindow:
         # Make modal
         self.window.transient(parent)
         self.window.grab_set()
+        
+        # Handle window close event to clean up camera
+        self.window.protocol("WM_DELETE_WINDOW", self.on_window_close)
         
         self.setup_ui()
         self.start_camera()
@@ -323,7 +380,7 @@ class PhotoCaptureWindow:
             messagebox.showwarning("Warning", "No face detected. Please position face properly.")
             return
         
-        # Save photo
+        # Save photo with temp prefix for cleanup
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         temp_path = f"temp_capture_{timestamp}.jpg"
         
@@ -332,12 +389,22 @@ class PhotoCaptureWindow:
         
         self.captured_photo_path = temp_path
         
-        self.cap.release()
+        self.cleanup_camera()
         self.window.destroy()
         messagebox.showinfo("Success", "Photo captured successfully!")
     
     def cancel(self):
         """Cancel capture"""
+        self.cleanup_camera()
+        self.window.destroy()
+    
+    def on_window_close(self):
+        """Handle window close event"""
+        self.cleanup_camera()
+        self.window.destroy()
+    
+    def cleanup_camera(self):
+        """Clean up camera resources"""
         if self.cap:
             self.cap.release()
-        self.window.destroy()
+            self.cap = None
