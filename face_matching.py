@@ -220,8 +220,8 @@ class FaceMatcher:
                 # Put the successful match result into the queue
                 result_queue.put(("match_found", result.to_display_dict()))
                 
-                # Announce the recognized student's name
-                self._announce_name(student["name"])
+                # Announce the recognized student's name, faculty, and graduation level
+                self._announce_name(student["name"], student["faculty"], student["graduation_level"])
 
                 # Reset state for the next QR code recognition
                 self.face_encodings_buffer.clear()
@@ -293,12 +293,13 @@ class FaceMatcher:
         print("TTS engine initialized.")
         return engine
 
-    def _announce_name(self, name: str):
+    def _announce_name(self, name: str, faculty: str, graduation_level: str):
         """
-        Makes a voice announcement of the recognized name.
+        Makes a voice announcement of the recognized name, faculty, and graduation level.
         """
-        print(f"Announcing: Welcome, {name}") # Added print statement for verification
-        self.tts_queue.put(f"Welcome, {name}")
+        message = f"Congratulations to {name} from {faculty}, graduated with {graduation_level}"
+        print(f"Announcing: {message}") # Added print statement for verification
+        self.tts_queue.put(message)
 
     def _tts_worker(self):
         """Dedicated worker thread for text-to-speech announcements."""
