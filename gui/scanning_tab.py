@@ -305,22 +305,6 @@ class ScanningTab:
             command=self.force_qr_success
         ).pack(side='left', padx=2)
     
-    # def setup_results_area(self):
-    #     """Setup recognition results display - COMMENTED OUT"""
-    #     result_frame = ttk.LabelFrame(self.frame, text="🎓 Student Recognition Results")
-    #     result_frame.pack(fill='x', padx=5, pady=(5, 0))
-    #     
-    #     # Create scrollable text area
-    #     text_frame = ttk.Frame(result_frame)
-    #     text_frame.pack(fill='both', expand=True, padx=10, pady=10)
-    #     
-    #     self.result_text = tk.Text(text_frame, height=8, wrap=tk.WORD)
-    #     self.result_text.pack(side='left', fill='both', expand=True)
-    #     
-    #     # Add scrollbar
-    #     scrollbar = ttk.Scrollbar(text_frame, orient="vertical", command=self.result_text.yview)
-    #     scrollbar.pack(side="right", fill="y")
-    #     self.result_text.configure(yscrollcommand=scrollbar.set)
     
     def start_scanning(self):
         """Start real-time recognition"""
@@ -340,16 +324,6 @@ class ScanningTab:
         # Reset visual feedback
         self.update_visual_feedback_display()
         
-        # Clear result display - COMMENTED OUT since results area is hidden
-        # self.result_text.delete(1.0, tk.END)
-        # self.result_text.insert(tk.END, "🚀 Face Recognition System Started\n")
-        # self.result_text.insert(tk.END, "=" * 50 + "\n")
-        # self.result_text.insert(tk.END, f"📺 Display FPS: {self.config['display_fps']}\n")
-        # self.result_text.insert(tk.END, f"🔍 Detection FPS: {self.config['detection_fps']}\n")
-        # self.result_text.insert(tk.END, f"⏰ QR Timeout: {self.config['qr_timeout']} seconds\n")
-        # self.result_text.insert(tk.END, f"🔄 Max Attempts: {self.config['max_match_attempts']}\n")
-        # self.result_text.insert(tk.END, "=" * 50 + "\n\n")
-        
         # Start camera worker
         self.camera_worker.start()
     
@@ -368,11 +342,6 @@ class ScanningTab:
         
         # Stop camera worker
         self.camera_worker.stop()
-        
-        # Results display commented out
-        # self.result_text.insert(tk.END, "\n" + "=" * 50 + "\n")
-        # self.result_text.insert(tk.END, "⏹️ Face Recognition System Stopped\n")
-        # self.result_text.see(tk.END)
     
     def submit_manual_qr(self):
         """Submit manually entered QR code"""
@@ -388,14 +357,6 @@ class ScanningTab:
         self.update_visual_feedback_for_new_qr(qr_data)
         
         if self.is_scanning:
-            # Results area commented out
-            # self.add_result_message(
-            #     f"📱 NEW QR CODE LOADED\n" +
-            #     f"🆔 Student ID: {qr_data}\n" +
-            #     f"📥 Source: Manual Input\n" +
-            #     f"⏰ Timeout: {self.config['qr_timeout']} seconds\n" +
-            #     f"🔍 Starting face recognition...\n"
-            # )
             pass
     
     def import_qr_image(self):
@@ -419,12 +380,6 @@ class ScanningTab:
             self.update_visual_feedback_for_new_qr(qr_data)
             
             if self.is_scanning:
-                # Results area commented out
-                # self.add_result_message(
-                #     f"📱 QR CODE FROM IMAGE\n" +
-                #     f"🆔 Student ID: {qr_data}\n" +
-                #     f"📥 Source: {os.path.basename(file_path)}\n"
-                # )
                 pass
         else:
             messagebox.showerror("Error", "No QR code found in image")
@@ -442,8 +397,6 @@ class ScanningTab:
         self.update_visual_feedback_for_no_qr()
         
         if self.is_scanning:
-            # Results area commented out
-            # self.add_result_message("🗑️ QR data cleared\n")
             pass
     
     def reset_qr_attempts(self):
@@ -453,11 +406,6 @@ class ScanningTab:
         if self.is_scanning:
             qr_data = self.qr_manager.get_current_qr()
             if qr_data:
-                # Results area commented out
-                # self.add_result_message(
-                #     f"🔄 ATTEMPTS RESET for QR: {qr_data.data}\n" +
-                #     f"📊 Attempt counter reset to 0\n"
-                # )
                 pass
     
     def force_qr_success(self):
@@ -473,7 +421,6 @@ class ScanningTab:
         
         if result:
             # Results area commented out, but still display match result for other purposes
-            # self.display_match_result(result.to_display_dict())
             self.qr_manager.clear_current_qr()
             messagebox.showinfo("Manual Override", f"Manually confirmed: {result.name}")
         else:
@@ -798,74 +745,6 @@ class ScanningTab:
         # Clear recognition result
         self.last_recognition_result = None
         self.recognition_feedback_start_time = None
-    
-    # COMMENTED OUT - Results display methods no longer needed
-    # def display_match_result(self, data):
-    #     """Display successful match"""
-    #     result_text = f"""
-    # 🎉 RECOGNITION SUCCESSFUL 🎉
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # ⏰ Time: {data['timestamp']}
-    # 🆔 Student ID: {data['student_id']}
-    # 👤 Name: {data['name']}
-    # 🏛️ Faculty: {data['faculty']}
-    # 🎓 Level: {data['graduation_level']}
-    # 📊 Similarity: {data['similarity']:.3f}
-    # 🎯 Confidence: {data['confidence_level']}/5
-    # 🔄 Attempts: {data.get('total_attempts', 0)}
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # 
-    # """
-    #     self.add_result_message(result_text)
-    # 
-    # def display_low_similarity(self, data):
-    #     """Display low similarity warning"""
-    #     result_text = f"""
-    # ⚠️ ATTEMPTING ({data['attempt']}/{data['max_attempts']})
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # ⏰ Time: {data['timestamp']}
-    # 🆔 ID: {data['student_id']}
-    # 👤 Expected: {data['student_name']}
-    # 📊 Similarity: {data['similarity']:.3f}
-    # 📊 Required: {data['required']:.3f}
-    # 💡 {data['suggestion']}
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # 
-    # """
-    #     self.add_result_message(result_text)
-    # 
-    # def display_student_not_found(self, data):
-    #     """Display student not found message"""
-    #     result_text = f"""
-    # ❌ STUDENT NOT FOUND
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # ⏰ Time: {data['timestamp']}
-    # 🆔 Student ID: {data['student_id']}
-    # ❌ Not registered in system
-    # 💡 Please check ID or register first
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # 
-    # """
-    #     self.add_result_message(result_text)
-    # 
-    # def display_qr_timeout(self, data):
-    #     """Display QR timeout message"""
-    #     result_text = f"""
-    # ⏰ QR CODE TIMEOUT
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # 🆔 Student ID: {data['data']}
-    # ⏰ Timeout after: {self.config['qr_timeout']}s
-    # 🔄 Total attempts: {data['attempt_count']}
-    # 💡 Please scan QR code again
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # 
-    # """
-    #     self.add_result_message(result_text)
-    # 
-    # def add_result_message(self, message):
-    #     """Add message to result display"""
-    #     self.result_text.insert(tk.END, message)
-    #     self.result_text.see(tk.END)
     
     def update_gui_loop(self):
         """Main GUI update loop"""

@@ -115,6 +115,8 @@ class CameraWorker:
         display_interval = 1.0 / self.config['display_fps']
         last_display_time = time.time()
         
+        detector = cv2.QRCodeDetector()
+
         while self.is_running:
             current_time = time.time()
             ret, frame = self.cap.read()
@@ -125,6 +127,11 @@ class CameraWorker:
             
             frame = cv2.flip(frame, 1)  # Mirror flip
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+            qr_data, points, _ = detector.detectAndDecode(frame_rgb)
+            if qr_data:
+                self.qr_manager.set_current_qr(qr_data, "Camera Scan")
+                self.result_queue.put(("qr_scanned", qr_data))
             
             # Face detection (low frequency)
             should_detect = (
