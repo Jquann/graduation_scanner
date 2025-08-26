@@ -9,8 +9,10 @@ import numpy as np
 import insightface
 from typing import List, Tuple, Optional, Any
 import cv2
+from insightface.utils.face_align import norm_crop # Import for face alignment
 
 from config import Config
+from DeepFaceModel.FasNet import Fasnet
 
 
 class FaceRecognitionEngine:
@@ -29,6 +31,8 @@ class FaceRecognitionEngine:
         """
         self.config = Config.get_performance_config(performance_mode)
         self.face_app = None
+        self.fasnet_model = None # Initialize Fasnet model
+        self.last_spoof_error = "" # Initialize last spoofing error message
         self.initialize_model()
     
     def initialize_model(self):
@@ -46,9 +50,58 @@ class FaceRecognitionEngine:
             # Prepare the model for inference, setting the context ID and detection size
             self.face_app.prepare(ctx_id=0, det_size=self.config['det_size'])
             print("InsightFace model loaded successfully")
+
+            # Initialize Fasnet model
+            self.fasnet_model = Fasnet()
+            print("Fasnet anti-spoofing model loaded successfully")
         except Exception as e:
-            print(f"Error loading InsightFace model: {e}")
+            print(f"Error loading face recognition or anti-spoofing models: {e}")
             raise # Re-raise the exception to indicate a critical failure
+
+    def process_single_face_with_spoofing(self, face: Any, frame: np.ndarray) -> Optional[Tuple[np.ndarray, bool, float]]:
+        """
+        Processes a single detected face, performs anti-spoofing, and extracts its embedding.
+
+        Args:
+            face (Any): Detected face object from InsightFace.
+            frame (np.ndarray): The original input video frame.
+
+        Returns:
+            Optional[Tuple[np.ndarray, bool, float]]: A tuple containing the normalized face embedding,
+                                                      a boolean indicating if it's a real face (not spoof),
+                                                      and the spoofing confidence. Returns None if spoofing
+                                                      is detected or an error occurs.
+        """
+        x1, y1, x2, y2 = face.bbox.astype(int)
+        w, h = x2 - x1, y2 - y1
+
+        try:
+            # Align face using facial landmarks
+            aligned_face = norm_crop(frame, landmark=face.kps)
+            aligned_face = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2RGB)
+            aligned_face = cv2.resize(aligned_face, self.config['recognition_size'])
+
+            # Perform spoofing check
+            is_real, spoof_confidence = self.detect_spoofing(aligned_face)
+            if not is_real:
+                # Check if the detection was due to model not being initialized
+                if spoof_confidence == 0.0 and "Fasnet model not initialized" in self.last_spoof_error: # Assuming I'll add a way to store the last error
+                    print(f"⚠️ Anti-spoofing inactive: {self.last_spoof_error}")
+                else:
+                    print(f"⚠️ Spoofing attempt detected! (Confidence: {spoof_confidence*100:.1f}%)")
+                return None # Return None if spoofing is detected
+            else:
+                print(f"✅ Face is real. (Spoofing Confidence: {spoof_confidence*100:.1f}%)")
+
+            # Get face embedding
+            # The embedding is already normalized by InsightFace when accessed via normed_embedding
+            current_embedding = face.normed_embedding
+
+            return current_embedding, is_real, spoof_confidence
+
+        except Exception as e:
+            print(f"❌ Failed to process face with spoofing check: {e}")
+            return None
     
     def detect_faces(self, image: np.ndarray) -> List[Any]:
         """
@@ -110,9 +163,11 @@ class FaceRecognitionEngine:
         encodings = []
         
         for face in faces:
-            # Ensure the face object has a normed_embedding attribute
-            if hasattr(face, 'normed_embedding'):
-                encodings.append(face.normed_embedding)
+            processed_result = self.process_single_face_with_spoofing(face, image)
+            if processed_result:
+                embedding, is_real, _ = processed_result
+                if is_real:
+                    encodings.append(embedding)
         
         return encodings
     
@@ -286,6 +341,40 @@ class FaceRecognitionEngine:
         
         return bounding_boxes
     
+    def detect_spoofing(self, face_img: np.ndarray, bbox: Optional[Tuple[int, int, int, int]] = None) -> Tuple[bool, float]:
+        """
+        Detect if the face is real or a spoof attempt using Fasnet model.
+
+        Args:
+            face_img (np.ndarray): Cropped face image (numpy array) or full frame.
+            bbox (Optional[Tuple[int, int, int, int]]): Optional bounding box (x, y, w, h)
+                                                        if face_img is a full frame.
+
+        Returns:
+            Tuple[bool, float]: (is_real, confidence) where is_real is a boolean and confidence is a float 0-1.
+        """
+        if self.fasnet_model is None:
+            error_msg = "Fasnet model not initialized for spoof detection."
+            self.last_spoof_error = error_msg
+            print(f"⚠️ {error_msg}")
+            return False, 0.0
+
+        try:
+            if bbox is not None:
+                x, y, w, h = bbox
+                is_real, confidence = self.fasnet_model.analyze(face_img, (x, y, w, h))
+            else:
+                # If no bbox, assume face_img is already cropped and use its dimensions as the bbox
+                is_real, confidence = self.fasnet_model.analyze(face_img, (0, 0, face_img.shape[1], face_img.shape[0]))
+            
+            self.last_spoof_error = "" # Clear error on successful detection
+            return is_real, confidence
+        except Exception as e:
+            error_msg = f"Spoof detection error: {str(e)}"
+            self.last_spoof_error = error_msg
+            print(f"⚠️ {error_msg}")
+            return False, 0.0
+
     def preprocess_image(self, image: np.ndarray) -> np.ndarray:
         """
         Preprocesses an image to ensure it is in RGB format, which is typically

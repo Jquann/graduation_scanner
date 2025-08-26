@@ -111,6 +111,7 @@ class FaceDetectionResult:
     confidence: float
     timestamp: float
     encoding: Optional[Any] = None  # numpy array
+    is_spoof: bool = False # New field to indicate if the detected face is a spoof
     
     def scale_bbox(self, scale_x: float, scale_y: float) -> List[int]:
         """Scale bounding box coordinates"""

@@ -79,15 +79,20 @@ class FaceMatcher:
         try:
             # Continuously retrieve encodings until the queue is empty
             while True:
-                face_encoding = face_queue.get_nowait() # Non-blocking retrieval
-                self.face_encodings_buffer.append({
-                    'encoding': face_encoding,
-                    'timestamp': current_time
-                })
-                
-                # Ensure the buffer does not exceed the configured maximum size
-                if len(self.face_encodings_buffer) > self.config['face_buffer_size']:
-                    self.face_encodings_buffer.pop(0) # Remove the oldest encoding
+                face_data = face_queue.get_nowait() # Non-blocking retrieval
+                if isinstance(face_data, str) and face_data == "SPOOF_DETECTED":
+                    self.face_encodings_buffer.clear() # Clear buffer on spoof detection
+                    print("FaceMatcher: Spoof detected, clearing encoding buffer.")
+                else:
+                    # Assuming face_data is a numpy array (embedding) if not "SPOOF_DETECTED"
+                    self.face_encodings_buffer.append({
+                        'encoding': face_data,
+                        'timestamp': current_time
+                    })
+                    
+                    # Ensure the buffer does not exceed the configured maximum size
+                    if len(self.face_encodings_buffer) > self.config['face_buffer_size']:
+                        self.face_encodings_buffer.pop(0) # Remove the oldest encoding
         except queue.Empty:
             # Expected exception when the queue is empty, no action needed
             pass

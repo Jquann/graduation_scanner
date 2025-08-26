@@ -36,6 +36,7 @@ class Config:
             'detection_fps': 1,               # Face detection frequency (FPS)
             'display_fps': 25,                # Display frequency (FPS)
             'detection_frame_size': (320, 240), # Detection frame size
+            'recognition_size': (112, 112),   # Face recognition input size
             'gui_update_ms': 40,              # GUI update interval (25 FPS)
             'match_cooldown': 1.0,            # Cooldown after each attempt (reduced)
             'face_buffer_size': 8,            # Face encoding buffer size
@@ -51,6 +52,7 @@ class Config:
             'detection_fps': 2,
             'display_fps': 30,
             'detection_frame_size': (400, 300),
+            'recognition_size': (112, 112),   # Face recognition input size
             'gui_update_ms': 33,
             'match_cooldown': 0.8,
             'face_buffer_size': 10,
@@ -66,6 +68,7 @@ class Config:
             'detection_fps': 5,
             'display_fps': 30,
             'detection_frame_size': (640, 480),
+            'recognition_size': (112, 112),   # Face recognition input size
             'gui_update_ms': 16,
             'match_cooldown': 0.5,
             'face_buffer_size': 12,

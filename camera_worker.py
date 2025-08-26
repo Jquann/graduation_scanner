@@ -189,17 +189,32 @@ class CameraWorker:
                         int(bbox[3] * scale_y)
                     ]
                     
+                    # Process face with spoofing check
+                    processed_result = self.face_engine.process_single_face_with_spoofing(face, frame)
+                    
+                    is_real = True
+                    spoof_confidence = 0.0
+                    if processed_result:
+                        embedding, is_real, spoof_confidence = processed_result
+                        if is_real:
+                            self.face_queue.put(embedding)
+                        else:
+                            print(f"Spoofing detected for a face with confidence: {spoof_confidence:.2f}")
+                            self.face_queue.put("SPOOF_DETECTED") # Signal spoof detection
+                    else:
+                        # If processing returns None, it means spoofing was detected or an error occurred
+                        is_real = False
+                        print("Face processing (including spoofing check) returned None.")
+                        self.face_queue.put("SPOOF_DETECTED") # Signal general processing failure
+
                     face_info = FaceDetectionResult(
                         bbox=scaled_bbox,
                         confidence=getattr(face, 'det_score', 1.0),
-                        timestamp=timestamp
+                        timestamp=timestamp,
+                        is_spoof=not is_real # Set is_spoof based on processing result
                     )
                     faces_info.append(face_info)
-                    
-                    # Send encoding for matching
-                    if hasattr(face, 'normed_embedding'):
-                        self.face_queue.put(face.normed_embedding)
-                
+
                 # Update current faces
                 self.face_detection_queue.put({
                     'type': 'faces_detected',
@@ -220,13 +235,22 @@ class CameraWorker:
         # Draw face boxes
         for face in self.current_faces:
             bbox = face.bbox
-            cv2.rectangle(display_frame, (bbox[0], bbox[1]), 
-                         (bbox[2], bbox[3]), (0, 255, 0), 2)
             
-            # Add confidence text
-            cv2.putText(display_frame, f"Face: {face.confidence:.2f}",
+            # Determine color and text based on spoofing status
+            if face.is_spoof:
+                box_color = (0, 0, 255) # Red for spoof
+                text_label = "Spoof Detected!"
+            else:
+                box_color = (0, 255, 0) # Green for real face
+                text_label = f"Face: {face.confidence:.2f}"
+            
+            cv2.rectangle(display_frame, (bbox[0], bbox[1]), 
+                         (bbox[2], bbox[3]), box_color, 2)
+            
+            # Add text label
+            cv2.putText(display_frame, text_label,
                        (bbox[0], bbox[1]-10), cv2.FONT_HERSHEY_SIMPLEX,
-                       0.6, (0, 255, 0), 2)
+                       0.6, box_color, 2)
         
         # Add status overlay
         self._add_status_overlay(display_frame, current_time)
