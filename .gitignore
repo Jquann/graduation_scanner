@@ -6,3 +6,5 @@ venv/
 graduation_data/photos/*
 graduation_data/qrcodes/*
 graduation_data/students_data.json
+
+model_train/archive/*
