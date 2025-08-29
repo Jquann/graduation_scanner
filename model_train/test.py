@@ -51,7 +51,7 @@ def get_embedding(img_path):
     return None
 
 # DeepFace embedding
-def get_deepface_embedding(img_path):
+def get_arcface_embedding(img_path):
     try:
         obj = DeepFace.represent(img_path=img_path, model_name='ArcFace', enforce_detection=False)
         return obj[0]['embedding'] if isinstance(obj, list) else obj['embedding']
@@ -60,7 +60,7 @@ def get_deepface_embedding(img_path):
 
 
 # DeepFace VGG-Face embedding
-def get_deepface_vgg_embedding(img_path):
+def get_vgg_embedding(img_path):
     try:
         obj = DeepFace.represent(img_path=img_path, model_name='VGG-Face', enforce_detection=False)
         return obj[0]['embedding'] if isinstance(obj, list) else obj['embedding']
@@ -68,15 +68,15 @@ def get_deepface_vgg_embedding(img_path):
         warnings.warn(str(e))
         return None
 
-pairs = load_lfw_pairs(PAIRS_PATH)[:20]
+pairs = load_lfw_pairs(PAIRS_PATH)[:100]
 
 def cosine_similarity(a, b):
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
 results = {
     'InsightFace': {'y_true': [], 'y_pred': [], 'skipped': 0},
-    'DeepFace_ArcFace': {'y_true': [], 'y_pred': [], 'skipped': 0},
-    'DeepFace_VGGFace': {'y_true': [], 'y_pred': [], 'skipped': 0}
+    'ArcFace': {'y_true': [], 'y_pred': [], 'skipped': 0},
+    'VGGFace': {'y_true': [], 'y_pred': [], 'skipped': 0}
 }
 
 for img1, img2, is_same in pairs:
@@ -92,26 +92,26 @@ for img1, img2, is_same in pairs:
         results['InsightFace']['skipped'] += 1
 
     # DeepFace ArcFace
-    emb1 = get_deepface_embedding(img1)
-    emb2 = get_deepface_embedding(img2)
+    emb1 = get_arcface_embedding(img1)
+    emb2 = get_arcface_embedding(img2)
     if emb1 is not None and emb2 is not None:
         sim = cosine_similarity(emb1, emb2)
         pred = sim > 0.5
-        results['DeepFace_ArcFace']['y_true'].append(is_same)
-        results['DeepFace_ArcFace']['y_pred'].append(pred)
+        results['ArcFace']['y_true'].append(is_same)
+        results['ArcFace']['y_pred'].append(pred)
     else:
-        results['DeepFace_ArcFace']['skipped'] += 1
+        results['ArcFace']['skipped'] += 1
 
     # DeepFace VGG-Face
-    emb1 = get_deepface_vgg_embedding(img1)
-    emb2 = get_deepface_vgg_embedding(img2)
+    emb1 = get_vgg_embedding(img1)
+    emb2 = get_vgg_embedding(img2)
     if emb1 is not None and emb2 is not None:
         sim = cosine_similarity(emb1, emb2)
         pred = sim > 0.5
-        results['DeepFace_VGGFace']['y_true'].append(is_same)
-        results['DeepFace_VGGFace']['y_pred'].append(pred)
+        results['VGGFace']['y_true'].append(is_same)
+        results['VGGFace']['y_pred'].append(pred)
     else:
-        results['DeepFace_VGGFace']['skipped'] += 1
+        results['VGGFace']['skipped'] += 1
 
 # Calculate metrics and plot
 metrics = ['accuracy', 'f1', 'precision', 'recall']
@@ -126,17 +126,27 @@ for algo in results:
     print(f"{algo}: accuracy={scores[algo]['accuracy']:.2%}, f1={scores[algo]['f1']:.2%}, precision={scores[algo]['precision']:.2%}, recall={scores[algo]['recall']:.2%}, skipped={results[algo]['skipped']}")
 
 # Plot
+
+
+# Ensure result folder exists inside model_train
+result_dir = os.path.join(os.path.dirname(__file__), 'result')
+os.makedirs(result_dir, exist_ok=True)
+
 fig, ax = plt.subplots()
 bar_width = 0.2
 index = np.arange(len(metrics))
 for i, algo in enumerate(results):
-    ax.bar(index + i * bar_width, [scores[algo][m] for m in metrics], bar_width, label=algo)
+    values = [scores[algo][m] for m in metrics]
+    bars = ax.bar(index + i * bar_width, values, bar_width, label=algo)
+    # Add metric values on top of bars
+    for bar, value in zip(bars, values):
+        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01, f"{value:.2f}", ha='center', va='bottom', fontsize=8)
 ax.set_xlabel('Metric')
 ax.set_ylabel('Score')
-ax.set_title('Face Recognition Comparison (LFW, 100 pairs)')
+ax.set_title(f'Face Recognition Comparison (LFW, {len(pairs)} pairs)')
 ax.set_xticks(index + bar_width)
 ax.set_xticklabels(metrics)
-ax.legend()
+ax.legend(loc='upper left', bbox_to_anchor=(1, 1))
 plt.tight_layout()
-plt.savefig('face_recognition_comparison.png')
+plt.savefig(os.path.join(result_dir, 'face_recognition_comparison.png'))
 plt.show()
