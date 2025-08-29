@@ -68,7 +68,7 @@ def get_vgg_embedding(img_path):
         warnings.warn(str(e))
         return None
 
-pairs = load_lfw_pairs(PAIRS_PATH)[:100]
+pairs = load_lfw_pairs(PAIRS_PATH)[:1000]
 
 def cosine_similarity(a, b):
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
@@ -148,5 +148,8 @@ ax.set_xticks(index + bar_width)
 ax.set_xticklabels(metrics)
 ax.legend(loc='upper left', bbox_to_anchor=(1, 1))
 plt.tight_layout()
-plt.savefig(os.path.join(result_dir, 'face_recognition_comparison.png'))
+import datetime
+timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+filename = f'face_recognition_comparison_{timestamp}.png'
+plt.savefig(os.path.join(result_dir, filename))
 plt.show()
