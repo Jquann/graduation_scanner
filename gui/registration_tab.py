@@ -222,7 +222,8 @@ class RegistrationTab:
                 graduation_level=graduation_level,
                 photo_path=photo_save_path,
                 qr_code_path=qr_save_path,
-                face_encoding=face_encoding.tolist()
+                face_encoding=face_encoding.tolist(),
+                attendance="Pending"
             )
             
             # Save to database

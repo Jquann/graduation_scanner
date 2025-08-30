@@ -71,6 +71,15 @@ class StudentDatabase:
                 return self.save_students_data()
         return False
     
+    	
+    def update_student_attendance(self, student_id: str) -> bool:
+        """Update student's attendance status to Present"""
+        for i, student in enumerate(self.students_data["students"]):
+            if student["student_id"] == student_id:
+                self.students_data["students"][i]["attendance"] = "Present"
+                return self.save_students_data()
+        return False
+    
     def delete_student(self, student_id: str) -> bool:
         """Delete a student from the database"""
         original_count = len(self.students_data["students"])
@@ -145,6 +154,7 @@ class StudentDatabase:
         # Count by graduation level
         graduation_levels = {}
         faculties = {}
+        attendance_counts = {"Pending": 0, "Present": 0}
         
         for student in students:
             # Count graduation levels
@@ -154,7 +164,12 @@ class StudentDatabase:
             # Count faculties
             faculty = student.get('faculty', 'Unknown')
             faculties[faculty] = faculties.get(faculty, 0) + 1
-        
+
+            	
+            # Count attendance status
+            attendance = student.get('attendance', 'Pending')
+            attendance_counts[attendance] = attendance_counts.get(attendance, 0) + 1
+
         return {
             'total_students': len(students),
             'graduation_levels': graduation_levels,

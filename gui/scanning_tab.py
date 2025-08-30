@@ -422,6 +422,12 @@ class ScanningTab:
         if result:
             # Results area commented out, but still display match result for other purposes
             self.qr_manager.clear_current_qr()
+            # Update attendance to Present
+            success = self.database.update_student_attendance(qr_data.data)
+            if success:
+                messagebox.showinfo("Manual Override", f"Manually confirmed: {result.name}. Attendance marked as Present.")
+            else:
+                messagebox.showerror("Error", f"Failed to update attendance for {qr_data.data}")
             messagebox.showinfo("Manual Override", f"Manually confirmed: {result.name}")
         else:
             messagebox.showerror("Error", f"Student ID {qr_data.data} not found")
@@ -614,6 +620,15 @@ class ScanningTab:
     
     def show_success_feedback(self, data):
         """Show visual feedback for successful recognition"""
+        	
+        # Update attendance to Present
+        student_id = data.get('student_id')
+        if student_id:
+            success = self.database.update_student_attendance(student_id)
+            if not success:
+                self.show_error_feedback(f"Failed to update attendance for {student_id}")
+                return
+            
         self.last_recognition_result = data
         self.recognition_feedback_start_time = time.time()
         

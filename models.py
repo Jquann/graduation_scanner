@@ -20,7 +20,8 @@ class Student:
     qr_code_path: str
     face_encoding: List[float]
     registered_time: str = field(default_factory=lambda: datetime.now().isoformat())
-    
+    attendance: str = "Pending"
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
         return {
@@ -31,7 +32,8 @@ class Student:
             "photo_path": self.photo_path,
             "qr_code_path": self.qr_code_path,
             "face_encoding": self.face_encoding,
-            "registered_time": self.registered_time
+            "registered_time": self.registered_time,
+             "attendance": self.attendance
         }
     
     @classmethod
@@ -48,7 +50,8 @@ class QRData:
     load_time: float = field(default_factory=time.time)
     attempt_count: int = 0
     match_history: List[Dict] = field(default_factory=list)
-    
+    decode_history: List[Dict] = field(default_factory=list) 
+
     def is_expired(self, timeout: float) -> bool:
         """Check if QR data has expired"""
         return (time.time() - self.load_time) > timeout
@@ -72,7 +75,14 @@ class QRData:
             'timestamp': time.time(),
             'success': success
         })
-
+        
+    def add_decode_attempt(self, decoder: str, success: bool, timestamp: float):
+        """Add a decode attempt to history"""
+        self.decode_history.append({
+            'decoder': decoder,
+            'success': success,
+            'timestamp': timestamp
+        })
 
 @dataclass
 class RecognitionResult:

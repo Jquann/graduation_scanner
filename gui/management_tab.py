@@ -14,15 +14,22 @@ import csv
 import re
 import zipfile
 import shutil
-import tempfile
 import pandas as pd
 # from database import Database
 from pathlib import Path
+from typing import Optional, Dict, Any
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import inch
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from io import BytesIO
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import Config
-
 
 class ManagementTab:
     """Student management interface"""
@@ -140,7 +147,7 @@ class ManagementTab:
         tree_frame.pack(fill='both', expand=True, padx=10, pady=10)
         
         # Columns
-        columns = ('ID', 'Name', 'Faculty', 'Graduation Level', 'Registration Date')
+        columns = ('ID', 'Name', 'Faculty', 'Graduation Level', 'Attendance', 'Registration Date')
         
         self.student_tree = ttk.Treeview(
             tree_frame, 
@@ -155,6 +162,7 @@ class ManagementTab:
             'Name': 200,
             'Faculty': 200,
             'Graduation Level': 200,
+            'Attendance': 150,
             'Registration Date': 150
         }
         
@@ -227,6 +235,12 @@ class ManagementTab:
             command=self.import_data
         ).pack(side='left', padx=5)
         
+        ttk.Button(
+            button_frame,
+            text="📊 Generate Attendance Report",
+            command=self.generate_report
+        ).pack(side='left', padx=5)
+
         # ttk.Button(
         #     button_frame, 
         #     text="💾 Backup Database", 
@@ -435,6 +449,7 @@ class ManagementTab:
                 student.get("name", ""),
                 student.get("faculty", ""),
                 student.get("graduation_level", ""),
+                student.get("attendance", ""),
                 formatted_date
             ))
     
@@ -536,6 +551,7 @@ class ManagementTab:
             ("Full Name:", student.get("name", "N/A")),
             ("Faculty/Department:", student.get("faculty", "N/A")),
             ("Graduation Level:", student.get("graduation_level", "N/A")),
+            ("Attendance:", student.get("attendance", "Pending")),
             ("Registration Date:", self.format_datetime(student.get("registered_time", ""))),
         ]
         
@@ -838,12 +854,19 @@ class ManagementTab:
         level_combo = ttk.Combobox(form_frame, textvariable=level_var, width=37)
         level_combo['values'] = ('Pass', 'With Merit', 'With Distinction', 'With Distinction and Book Prize')
         level_combo.grid(row=3, column=1, columnspan=2, sticky='w', padx=10, pady=5)
+
+        # Attendance
+        ttk.Label(form_frame, text="Attendance:").grid(row=4, column=0, sticky='w', padx=10, pady=5)
+        attendance_var = tk.StringVar(value=student.get("attendance", "Pending"))
+        attendance_combo = ttk.Combobox(form_frame, textvariable=attendance_var, width=37, state='readonly')
+        attendance_combo['values'] = ('Pending', 'Present', 'Absent')
+        attendance_combo.grid(row=4, column=1, columnspan=2, sticky='w', padx=10, pady=5)
         
         # Current photo display
         ttk.Label(form_frame, text="Current Photo:").grid(row=4, column=0, sticky='nw', padx=10, pady=5)
         
         photo_frame = ttk.Frame(form_frame)
-        photo_frame.grid(row=4, column=1, columnspan=2, sticky='w', padx=10, pady=5)
+        photo_frame.grid(row=5, column=1, columnspan=2, sticky='w', padx=10, pady=5)
         
         # Display current photo
         photo_path = student.get("photo_path", "")
@@ -884,7 +907,8 @@ class ManagementTab:
             updated_student["name"] = new_name
             updated_student["faculty"] = new_faculty
             updated_student["graduation_level"] = new_level
-            
+            updated_student["attendance"] = attendance_var.get()
+
             # Save to database
             try:
                 if hasattr(self.database, 'update_student'):
@@ -1767,3 +1791,323 @@ class ManagementTab:
         except Exception as e:
             raise Exception(f"JSON import error: {str(e)}")
         
+    def find_student_by_id(self, student_id: str) -> Optional[Dict[str, Any]]:
+        """Find student data by student ID"""
+        for student in self.database.get_all_students():
+            if student["student_id"] == student_id:
+                return student
+        return None
+    
+    def generate_report(self):
+        """Generate a PDF attendance report with preview before saving"""
+        # Collect attendance statistics
+        attendance_records = []
+        present_count = 0
+        absent_count = 0
+        pending_count = 0
+        faculty_stats = {}
+        for student in self.filtered_students:
+            status = student.get('attendance', 'Pending')
+            faculty = student.get('faculty', 'Unknown')
+            if status in ('Pending', 'Absent'):
+                status = 'Absent'
+                absent_count += 1
+                if status == 'Pending':
+                    pending_count += 1
+            elif status == 'Present':
+                present_count += 1
+            if faculty not in faculty_stats:
+                faculty_stats[faculty] = {'Present': 0, 'Absent': 0}
+            faculty_stats[faculty][status] += 1
+            attendance_records.append({
+                'student_id': student['student_id'],
+                'name': student.get('name', 'Unknown'),
+                'faculty': faculty,
+                'attendance': status,
+                'timestamp': self.format_datetime(student.get('registered_time'))
+            })
+
+        if not attendance_records:
+            messagebox.showwarning("Warning", "No attendance data available")
+            return
+
+        # Generate PDF in memory
+        pdf_buffer = BytesIO()
+        doc = SimpleDocTemplate(pdf_buffer, pagesize=letter)
+        elements = []
+
+        styles = getSampleStyleSheet()
+        normal_style = styles['Normal']
+        title_style = styles['Title']
+        heading_style = styles['Heading2']
+
+        # Cover page
+        elements.append(Paragraph("Graduation Attendance Report", title_style))
+        elements.append(Spacer(1, 0.3 * inch))
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        elements.append(Paragraph(f"Generated: {timestamp}", normal_style))
+        elements.append(Spacer(1, 0.5 * inch))
+
+        # Statistics Section
+        total_students = len(self.filtered_students)
+        present_percent = (present_count / total_students * 100) if total_students else 0
+        absent_percent = (absent_count / total_students * 100) if total_students else 0
+        stats_text = [
+            f"Total Students: {total_students}",
+            f"Present: {present_count} ({present_percent:.1f}%)",
+            f"Absent: {absent_count} ({absent_percent:.1f}%) (includes {pending_count} Pending)"
+        ]
+        elements.append(Paragraph("Attendance Statistics", heading_style))
+        elements.append(Paragraph("<br/>".join(stats_text), normal_style))
+        elements.append(Spacer(1, 0.3 * inch))
+
+        # Generate charts for PDF and preview
+        # Pie chart for attendance distribution
+        fig_pie, ax_pie = plt.subplots(figsize=(4, 3))
+        ax_pie.pie(
+            [present_count, absent_count],
+            labels=['Present', 'Absent'],
+            colors=['#99cc99', '#ff9999'],
+            autopct='%1.1f%%',
+            startangle=90
+        )
+        ax_pie.set_title("Attendance Distribution")
+        pie_buffer = BytesIO()
+        fig_pie.savefig(pie_buffer, format='png', dpi=150, bbox_inches='tight')
+        plt.close(fig_pie)
+
+        # Add pie chart to PDF
+        pie_buffer.seek(0)
+        from reportlab.platypus import Image
+        pie_image = Image(pie_buffer, width=3*inch, height=2.25*inch)
+        pie_image.hAlign = 'CENTER'
+        elements.append(pie_image)
+        elements.append(Spacer(1, 0.3 * inch))
+
+        # Bar chart for faculty-wise attendance
+        if faculty_stats:
+            faculties = sorted(faculty_stats.keys())
+            present_counts = [faculty_stats[f]['Present'] for f in faculties]
+            absent_counts = [faculty_stats[f]['Absent'] for f in faculties]
+
+            fig_bar, ax_bar = plt.subplots(figsize=(6, 3))
+            x = range(len(faculties))
+            ax_bar.bar([i - 0.2 for i in x], present_counts, width=0.4, label='Present', color='#99cc99')
+            ax_bar.bar([i + 0.2 for i in x], absent_counts, width=0.4, label='Absent', color='#ff9999')
+            ax_bar.set_xticks(x)
+            ax_bar.set_xticklabels(faculties, rotation=45, ha='right')
+            ax_bar.set_ylabel('Number of Students')
+            ax_bar.set_title('Attendance by Faculty')
+            ax_bar.legend()
+            ax_bar.set_ylim(0, max(max(present_counts, absent_counts)) * 1.2)
+            plt.tight_layout()
+            bar_buffer = BytesIO()
+            fig_bar.savefig(bar_buffer, format='png', dpi=150, bbox_inches='tight')
+            plt.close(fig_bar)
+
+            # Add bar chart to PDF
+            bar_buffer.seek(0)
+            bar_image = Image(bar_buffer, width=4.5*inch, height=2.25*inch)
+            bar_image.hAlign = 'CENTER'
+            elements.append(bar_image)
+            elements.append(Spacer(1, 0.3 * inch))
+
+        # Faculty-wise Summary Table
+        elements.append(Paragraph("Faculty-wise Attendance Summary", heading_style))
+        faculty_table_data = [['Faculty', 'Present', 'Absent', 'Total']]
+        for faculty in sorted(faculty_stats.keys()):
+            p_count = faculty_stats[faculty]['Present']
+            a_count = faculty_stats[faculty]['Absent']
+            faculty_table_data.append([faculty, p_count, a_count, p_count + a_count])
+        faculty_table = Table(faculty_table_data)
+        faculty_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        elements.append(faculty_table)
+        elements.append(Spacer(1, 0.3 * inch))
+
+        # Detailed Attendance Table
+        elements.append(Paragraph("Attendance Details", heading_style))
+        table_data = [['Student ID', 'Name', 'Faculty', 'Attendance', 'Registration Date']]
+        for record in sorted(attendance_records, key=lambda x: x['name']):
+            table_data.append([
+                record['student_id'],
+                record['name'],
+                record['faculty'],
+                record['attendance'],
+                record['timestamp']
+            ])
+
+        table = Table(table_data)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 10),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('BOX', (0, 0), (-1, -1), 1, colors.black),
+            ('TEXTCOLOR', (3, 1), (3, -1), colors.green, lambda x: x == 'Present'),
+            ('TEXTCOLOR', (3, 1), (3, -1), colors.red, lambda x: x == 'Absent')
+        ]))
+        elements.append(table)
+
+        # Build PDF in memory
+        def add_footer(canvas, doc):
+            canvas.saveState()
+            canvas.setFont('Helvetica', 8)
+            canvas.drawString(inch, 0.5 * inch, f"Page {doc.page} | Generated by Graduation Scanner on {timestamp}")
+            canvas.restoreState()
+
+        doc.build(elements, onFirstPage=add_footer, onLaterPages=add_footer)
+        pdf_data = pdf_buffer.getvalue()
+        pdf_buffer.seek(0)
+
+        # Create preview window
+        preview_window = tk.Toplevel(self.frame)
+        preview_window.title("Attendance Report Preview")
+        preview_window.geometry("800x800")
+        preview_window.transient(self.frame)
+        preview_window.grab_set()
+
+        # Main frame with scrollable content
+        main_frame = ttk.Frame(preview_window)
+        main_frame.pack(fill='both', expand=True)
+
+        canvas = tk.Canvas(main_frame)
+        scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # Title and timestamp
+        ttk.Label(scrollable_frame, text="Graduation Attendance Report", font=('Arial', 14, 'bold')).pack(pady=10)
+        ttk.Label(scrollable_frame, text=f"Generated: {timestamp}", font=('Arial', 10)).pack()
+
+        # Statistics
+        ttk.Label(scrollable_frame, text="Attendance Statistics", font=('Arial', 12, 'bold')).pack(pady=10)
+        stats_label = ttk.Label(scrollable_frame, text="\n".join(stats_text), font=('Arial', 10), justify='left')
+        stats_label.pack(pady=5)
+
+        # Pie chart preview
+        pie_fig, pie_ax = plt.subplots(figsize=(4, 3))
+        pie_ax.pie(
+            [present_count, absent_count],
+            labels=['Present', 'Absent'],
+            colors=['#99cc99', '#ff9999'],
+            autopct='%1.1f%%',
+            startangle=90
+        )
+        pie_ax.set_title("Attendance Distribution")
+        pie_canvas = FigureCanvasTkAgg(pie_fig, master=scrollable_frame)
+        pie_canvas.draw()
+        pie_canvas.get_tk_widget().pack(pady=10)
+        plt.close(pie_fig)
+
+        # Bar chart preview
+        if faculty_stats:
+            bar_fig, bar_ax = plt.subplots(figsize=(6, 3))
+            x = range(len(faculties))
+            bar_ax.bar([i - 0.2 for i in x], present_counts, width=0.4, label='Present', color='#99cc99')
+            bar_ax.bar([i + 0.2 for i in x], absent_counts, width=0.4, label='Absent', color='#ff9999')
+            bar_ax.set_xticks(x)
+            bar_ax.set_xticklabels(faculties, rotation=45, ha='right')
+            bar_ax.set_ylabel('Number of Students')
+            bar_ax.set_title('Attendance by Faculty')
+            bar_ax.legend()
+            bar_ax.set_ylim(0, max(max(present_counts, absent_counts)) * 1.2)
+            plt.tight_layout()
+            bar_canvas = FigureCanvasTkAgg(bar_fig, master=scrollable_frame)
+            bar_canvas.draw()
+            bar_canvas.get_tk_widget().pack(pady=10)
+            plt.close(bar_fig)
+
+        # Faculty-wise Summary
+        ttk.Label(scrollable_frame, text="Faculty-wise Attendance Summary", font=('Arial', 12, 'bold')).pack(pady=10)
+        faculty_tree = ttk.Treeview(scrollable_frame, columns=('Faculty', 'Present', 'Absent', 'Total'), show='headings')
+        faculty_tree.heading('Faculty', text='Faculty')
+        faculty_tree.heading('Present', text='Present')
+        faculty_tree.heading('Absent', text='Absent')
+        faculty_tree.heading('Total', text='Total')
+        faculty_tree.column('Faculty', width=200)
+        faculty_tree.column('Present', width=100, anchor='center')
+        faculty_tree.column('Absent', width=100, anchor='center')
+        faculty_tree.column('Total', width=100, anchor='center')
+        for faculty in sorted(faculty_stats.keys()):
+            p_count = faculty_stats[faculty]['Present']
+            a_count = faculty_stats[faculty]['Absent']
+            faculty_tree.insert("", "end", values=(faculty, p_count, a_count, p_count + a_count))
+        faculty_tree.pack(pady=5, fill='x')
+
+        # Detailed Attendance
+        ttk.Label(scrollable_frame, text="Attendance Details", font=('Arial', 12, 'bold')).pack(pady=10)
+        detail_tree = ttk.Treeview(scrollable_frame, columns=('ID', 'Name', 'Faculty', 'Attendance', 'Date'), show='headings')
+        detail_tree.heading('ID', text='Student ID')
+        detail_tree.heading('Name', text='Name')
+        detail_tree.heading('Faculty', text='Faculty')
+        detail_tree.heading('Attendance', text='Attendance')
+        detail_tree.heading('Date', text='Registration Date')
+        detail_tree.column('ID', width=100)
+        detail_tree.column('Name', width=200)
+        detail_tree.column('Faculty', width=150)
+        detail_tree.column('Attendance', width=100, anchor='center')
+        detail_tree.column('Date', width=150)
+        for record in sorted(attendance_records, key=lambda x: x['name']):
+            detail_tree.insert("", "end", values=(
+                record['student_id'],
+                record['name'],
+                record['faculty'],
+                record['attendance'],
+                record['timestamp']
+            ))
+        detail_tree.pack(pady=5, fill='x')
+
+        # Buttons
+        button_frame = ttk.Frame(preview_window)
+        button_frame.pack(fill='x', pady=10)
+
+        def save_pdf():
+            save_path = filedialog.asksaveasfilename(
+                title="Save Attendance Report",
+                filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")],
+                defaultextension=".pdf",
+                initialfile=f"Attendance_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+            )
+            if save_path:
+                try:
+                    with open(save_path, 'wb') as f:
+                        f.write(pdf_data)
+                    preview_window.destroy()
+                    messagebox.showinfo("Success", f"Report saved: {save_path}")
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed to save report: {e}")
+
+        ttk.Button(button_frame, text="📤 Export PDF", command=save_pdf).pack(side='right', padx=5)
+        ttk.Button(button_frame, text="❌ Cancel", command=preview_window.destroy).pack(side='right', padx=5)
+
+        # Clean up
+        pdf_buffer.close()
+        pie_buffer.close()
+        if faculty_stats:
+            bar_buffer.close()
