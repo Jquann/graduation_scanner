@@ -1,0 +1,8 @@
+numpy<2
+insightface
+opencv-python
+pillow
+scikit-learn
+matplotlib
+onnx==1.16.1
+onnxruntime

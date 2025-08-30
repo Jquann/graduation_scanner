@@ -1,0 +1,8 @@
+numpy>=1.21.0,<2.0.0
+tensorflow>=2.8.0,<2.17.0
+tensorflow-keras
+opencv-python
+pillow
+scikit-learn
+matplotlib
+mtcnn

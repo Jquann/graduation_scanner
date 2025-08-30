@@ -1,0 +1,9 @@
+numpy<2.0
+opencv-python
+pillow
+scikit-learn
+matplotlib
+requests
+deepface
+pandas
+tensorflow
