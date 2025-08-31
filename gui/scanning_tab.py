@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Real-time face recognition and QR scanning tab with enhanced visual feedback
+Real-time face recognition and QR scanning tab
 """
 
 import tkinter as tk
@@ -14,16 +14,20 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import Config
+from .certificate_display import CertificateIntegration
 
 
 class ScanningTab:
-    """Real-time recognition interface with enhanced visual feedback"""
+    """Real-time recognition interface"""
     
     def __init__(self, parent, camera_worker, qr_manager, database, config):
         self.camera_worker = camera_worker
         self.qr_manager = qr_manager
         self.database = database
         self.config = config
+        
+        # Certificate display integration
+        self.certificate_integration = CertificateIntegration()
         
         # Create main frame
         self.frame = ttk.Frame(parent)
@@ -63,6 +67,10 @@ class ScanningTab:
             state='disabled'
         )
         self.stop_button.pack(side='left', padx=5)
+        
+        # Add certificate display button
+        cert_button = self.certificate_integration.add_certificate_button(control_frame)
+        cert_button.pack(side='left', padx=5)
         
         # Status indicators
         self.status_label = ttk.Label(control_frame, text="Status: Ready", foreground="blue")
@@ -134,7 +142,7 @@ class ScanningTab:
         # Student info display
         self.student_info_label = ttk.Label(
             feedback_frame,
-            text="🆔 Student: --",
+            text="🏆 Student: --",
             foreground="gray",
             font=('Arial', 9)
         )
@@ -166,6 +174,15 @@ class ScanningTab:
             font=('Arial', 8, 'italic')
         )
         self.instruction_label.pack(anchor='w', padx=5, pady=2)
+        
+        # Certificate display status
+        self.certificate_status_label = ttk.Label(
+            feedback_frame,
+            text="🎓 Certificate: Ready",
+            foreground="blue",
+            font=('Arial', 9, 'bold')
+        )
+        self.certificate_status_label.pack(anchor='w', padx=5, pady=2)
     
     def setup_qr_area(self, parent):
         """Setup QR code input area"""
@@ -181,7 +198,8 @@ class ScanningTab:
 2. Input QR code using methods below
 3. QR persists for {self.config['qr_timeout']}s
 4. System tries {self.config['max_match_attempts']} times
-5. Manual override available if needed"""
+5. Manual override available if needed
+6. Certificate displays automatically on success"""
         
         ttk.Label(
             instruction_frame, 
@@ -247,7 +265,7 @@ class ScanningTab:
         
         ttk.Button(
             button_frame, 
-            text="📁 Import QR Image", 
+            text="🖼️ Import QR Image", 
             command=self.import_qr_image
         ).pack(side='left', padx=5)
         
@@ -301,7 +319,7 @@ class ScanningTab:
         
         ttk.Button(
             qr_control_frame, 
-            text="⏭️ Force Success", 
+            text="⭐ Force Success", 
             command=self.force_qr_success
         ).pack(side='left', padx=2)
     
@@ -426,11 +444,41 @@ class ScanningTab:
             success = self.database.update_student_attendance(qr_data.data)
             if success:
                 messagebox.showinfo("Manual Override", f"Manually confirmed: {result.name}. Attendance marked as Present.")
+                
+                # Trigger certificate display for manual override
+                self.trigger_certificate_display(result)
+                
             else:
                 messagebox.showerror("Error", f"Failed to update attendance for {qr_data.data}")
-            messagebox.showinfo("Manual Override", f"Manually confirmed: {result.name}")
         else:
             messagebox.showerror("Error", f"Student ID {qr_data.data} not found")
+    
+    def trigger_certificate_display(self, student_result):
+        """Trigger certificate display for successful recognition"""
+        try:
+            # Prepare student data for certificate
+            certificate_data = {
+                'name': student_result.get('name', 'Unknown'),
+                'student_id': student_result.get('student_id', 'N/A'),
+                'faculty': student_result.get('faculty', 'Unknown Faculty'),
+                'graduation_level': student_result.get('graduation_level', 'Degree Program')
+            }
+            
+            # Display certificate
+            self.certificate_integration.show_student_certificate(certificate_data)
+            
+            # Update certificate status
+            self.certificate_status_label.config(
+                text=f"🎓 Certificate: Displaying {certificate_data['name']}",
+                foreground="green"
+            )
+            
+        except Exception as e:
+            print(f"Error displaying certificate: {e}")
+            self.certificate_status_label.config(
+                text="🎓 Certificate: Display error",
+                foreground="red"
+            )
     
     def update_visual_feedback_for_new_qr(self, qr_data):
         """Update visual feedback when new QR is loaded"""
@@ -439,12 +487,12 @@ class ScanningTab:
             name = student_info.get('name', 'Unknown')
             faculty = student_info.get('faculty', 'Unknown')
             self.student_info_label.config(
-                text=f"🆔 Expected: {name} ({faculty})",
+                text=f"🏆 Expected: {name} ({faculty})",
                 foreground="blue"
             )
         else:
             self.student_info_label.config(
-                text=f"🆔 Expected: {qr_data} (Not registered)",
+                text=f"🏆 Expected: {qr_data} (Not registered)",
                 foreground="red"
             )
         
@@ -459,7 +507,7 @@ class ScanningTab:
     
     def update_visual_feedback_for_no_qr(self):
         """Update visual feedback when no QR is loaded"""
-        self.student_info_label.config(text="🆔 Student: --", foreground="gray")
+        self.student_info_label.config(text="🏆 Student: --", foreground="gray")
         self.match_status_label.config(
             text="✨ Status: Waiting for QR code...",
             foreground="orange"
@@ -470,6 +518,7 @@ class ScanningTab:
         )
         self.accuracy_label.config(text="🎯 Accuracy: --", foreground="gray")
         self.attempt_progress_label.config(text="🔄 Progress: --", foreground="gray")
+        self.certificate_status_label.config(text="🎓 Certificate: Ready", foreground="blue")
     
     def update_visual_feedback_display(self):
         """Update visual feedback based on current state"""
@@ -594,6 +643,9 @@ class ScanningTab:
                     # Results area commented out
                     # self.display_match_result(data)
                     self.show_success_feedback(data)
+                    
+                    # Trigger certificate display for successful match
+                    self.trigger_certificate_display(data)
                 
                 elif message_type == "similarity_low":
                     # Results area commented out
@@ -645,7 +697,7 @@ class ScanningTab:
         )
         
         self.student_info_label.config(
-            text=f"🆔 Recognized: {data['name']}",
+            text=f"🏆 Recognized: {data['name']}",
             foreground="green"
         )
         
@@ -716,6 +768,11 @@ class ScanningTab:
             text="💡 Please check student registration or QR code",
             foreground="red"
         )
+        
+        self.certificate_status_label.config(
+            text="🎓 Certificate: Error occurred",
+            foreground="red"
+        )
     
     def show_timeout_feedback(self):
         """Show visual feedback for QR timeout"""
@@ -734,9 +791,14 @@ class ScanningTab:
             foreground="blue"
         )
         
+        self.certificate_status_label.config(
+            text="🎓 Certificate: Ready",
+            foreground="blue"
+        )
+        
         # Reset other displays
         self.accuracy_label.config(text="🎯 Accuracy: --", foreground="gray")
-        self.student_info_label.config(text="🆔 Student: --", foreground="gray")
+        self.student_info_label.config(text="🏆 Student: --", foreground="gray")
         self.attempt_progress_label.config(text="🔄 Progress: --", foreground="gray")
     
     def reset_visual_feedback(self):
@@ -746,7 +808,7 @@ class ScanningTab:
             foreground="gray"
         )
         self.accuracy_label.config(text="🎯 Accuracy: --", foreground="gray")
-        self.student_info_label.config(text="🆔 Student: --", foreground="gray")
+        self.student_info_label.config(text="🏆 Student: --", foreground="gray")
         self.match_status_label.config(
             text="✨ Status: System stopped",
             foreground="gray"
@@ -755,6 +817,10 @@ class ScanningTab:
         self.instruction_label.config(
             text="💡 Start system to begin recognition",
             foreground="gray"
+        )
+        self.certificate_status_label.config(
+            text="🎓 Certificate: Ready",
+            foreground="blue"
         )
         
         # Clear recognition result
