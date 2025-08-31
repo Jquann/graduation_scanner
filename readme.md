@@ -399,7 +399,7 @@ For issues or questions:
 
 ---
 
-**Version**: 2.0.0  
+**Version**: 1.0.0  
 **Last Updated**: 2025  
 **New Features**: Certificate Display System, Enhanced Visual Feedback, Ceremony Mode  
 **Core Features**: Face Recognition, Anti-Spoofing, QR Validation, TTS Announcements, Data Management
