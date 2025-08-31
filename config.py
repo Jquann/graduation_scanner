@@ -32,52 +32,52 @@ class Config:
     # Performance configurations
     PERFORMANCE_CONFIGS = {
         'low_cpu': {
-            'det_size': (256, 256),           # InsightFace detection size
-            'detection_fps': 1,               # Face detection frequency (FPS)
-            'display_fps': 25,                # Display frequency (FPS)
-            'detection_frame_size': (320, 240), # Detection frame size
-            'recognition_size': (112, 112),   # Face recognition input size
-            'gui_update_ms': 40,              # GUI update interval (25 FPS)
-            'match_cooldown': 1.0,            # Cooldown after each attempt (reduced)
-            'face_buffer_size': 8,            # Face encoding buffer size
-            'qr_timeout': 30.0,               # QR data timeout (30 seconds)
-            'min_match_attempts': 3,          # Minimum attempts before giving up
-            'max_match_attempts': 15,         # Maximum attempts before timeout
-            'similarity_threshold_base': 0.35,
-            'similarity_threshold_min': 0.28,
-            'similarity_threshold_max': 0.45,
+            'det_size': (320, 320),
+            'detection_fps': 1,
+            'display_fps': 25,
+            'detection_frame_size': (400, 300),
+            'recognition_size': (112, 112),
+            'gui_update_ms': 40,
+            'match_cooldown': 0.8,
+            'face_buffer_size': 12,
+            'qr_timeout': 30.0,
+            'min_match_attempts': 2,
+            'max_match_attempts': 20,
+            'similarity_threshold_base': 0.28,
+            'similarity_threshold_min': 0.22,
+            'similarity_threshold_max': 0.38,
         },
         'balanced': {
-            'det_size': (320, 320),
+            'det_size': (480, 480),
             'detection_fps': 2,
             'display_fps': 30,
-            'detection_frame_size': (400, 300),
-            'recognition_size': (112, 112),   # Face recognition input size
+            'detection_frame_size': (480, 360),
+            'recognition_size': (112, 112),
             'gui_update_ms': 33,
-            'match_cooldown': 0.8,
-            'face_buffer_size': 10,
-            'qr_timeout': 45.0,               # 45 seconds for balanced mode
-            'min_match_attempts': 5,
-            'max_match_attempts': 25,
-            'similarity_threshold_base': 0.35,
-            'similarity_threshold_min': 0.28,
-            'similarity_threshold_max': 0.45,
+            'match_cooldown': 0.6,
+            'face_buffer_size': 15,
+            'qr_timeout': 45.0,
+            'min_match_attempts': 3,
+            'max_match_attempts': 30,
+            'similarity_threshold_base': 0.28,
+            'similarity_threshold_min': 0.22,
+            'similarity_threshold_max': 0.38,
         },
         'high_performance': {
-            'det_size': (512, 512),
+            'det_size': (640, 640),
             'detection_fps': 5,
             'display_fps': 30,
             'detection_frame_size': (640, 480),
-            'recognition_size': (112, 112),   # Face recognition input size
+            'recognition_size': (112, 112),
             'gui_update_ms': 16,
-            'match_cooldown': 0.5,
-            'face_buffer_size': 12,
-            'qr_timeout': 60.0,               # 60 seconds for high performance
-            'min_match_attempts': 8,
+            'match_cooldown': 0.4,
+            'face_buffer_size': 18,
+            'qr_timeout': 60.0,
+            'min_match_attempts': 5,
             'max_match_attempts': 40,
-            'similarity_threshold_base': 0.35,
-            'similarity_threshold_min': 0.28,
-            'similarity_threshold_max': 0.45,
+            'similarity_threshold_base': 0.28,
+            'similarity_threshold_min': 0.22,
+            'similarity_threshold_max': 0.38,
         }
     }
     
@@ -93,10 +93,10 @@ class Config:
     QR_BORDER = 5
     
     # Recognition settings
-    CONSECUTIVE_MATCHES_THRESHOLD = 2  # Need 2 consecutive matches to confirm
-    FACE_ENCODING_EXPIRY = 3.0  # Keep encodings for 3 seconds
-    ENCODING_BONUS = 0.01  # Per encoding bonus for threshold
-    ATTEMPT_PENALTY = 0.005  # Per attempt penalty for threshold
+    CONSECUTIVE_MATCHES_THRESHOLD = 2
+    FACE_ENCODING_EXPIRY = 3.0
+    ENCODING_BONUS = 0.008
+    ATTEMPT_PENALTY = 0.005
     
     # Graduation levels
     GRADUATION_LEVELS = [

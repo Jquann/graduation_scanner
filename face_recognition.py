@@ -88,7 +88,11 @@ class FaceRecognitionEngine:
                 if spoof_confidence == 0.0 and "Fasnet model not initialized" in self.last_spoof_error: # Assuming I'll add a way to store the last error
                     print(f"⚠️ Anti-spoofing inactive: {self.last_spoof_error}")
                 else:
-                    print(f"⚠️ Spoofing attempt detected! (Confidence: {spoof_confidence*100:.1f}%)")
+                    if spoof_confidence < 0.3:
+                        print(f"⚠️ High confidence spoofing detected! (Confidence: {spoof_confidence*100:.1f}%)")
+                        return None
+                    else:
+                        print(f"⚠️ Possible spoof but allowing... (Confidence: {spoof_confidence*100:.1f}%)")
                 return None # Return None if spoofing is detected
             else:
                 print(f"✅ Face is real. (Spoofing Confidence: {spoof_confidence*100:.1f}%)")
@@ -240,9 +244,9 @@ class FaceRecognitionEngine:
             # Remove outliers for better accuracy: sort and trim extreme values
             sorted_similarities = sorted(similarities)
             
-            if len(sorted_similarities) >= 5:
+            if len(sorted_similarities) >= 7:
                 # Remove bottom 20% and top 20% to mitigate extreme values
-                trim_count = max(1, len(sorted_similarities) // 5)
+                trim_count = max(1, len(sorted_similarities) // 8)
                 trimmed_similarities = sorted_similarities[trim_count:-trim_count]
             else:
                 # If fewer than 5 similarities, no trimming is applied
@@ -253,7 +257,7 @@ class FaceRecognitionEngine:
                 avg_similarity = np.mean(trimmed_similarities)
                 
                 # Weighted average: give best similarity higher weight for robustness
-                weighted_similarity = (best_similarity * 0.7) + (avg_similarity * 0.3)
+                weighted_similarity = (best_similarity * 0.8) + (avg_similarity * 0.2)
                 
                 return weighted_similarity, avg_similarity
             else:
@@ -265,7 +269,7 @@ class FaceRecognitionEngine:
             return 0.0, 0.0
     
     def calculate_dynamic_threshold(self, num_encodings: int, attempt_count: int,
-                                   base_threshold: float = 0.35) -> float:
+                                   base_threshold: float = 0.28) -> float:
         """
         Calculates a dynamic similarity threshold based on the number of encodings
         and the current attemptcan  count. This adjusts the required similarity for a match.
@@ -280,10 +284,10 @@ class FaceRecognitionEngine:
                    configured minimum and maximum values.
         """
         # Apply a bonus for more available encodings (makes threshold lower, easier to match)
-        encoding_bonus = min(num_encodings * Config.ENCODING_BONUS, 0.05)
+        encoding_bonus = min(num_encodings * 0.008, 0.03)
         
         # Apply a penalty for more attempts (makes threshold higher, harder to match)
-        attempt_penalty = min(attempt_count * Config.ATTEMPT_PENALTY, 0.03)
+        attempt_penalty = min(attempt_count * 0.005, 0.02)
         
         # Calculate dynamic threshold by adjusting the base threshold
         dynamic_threshold = base_threshold - encoding_bonus + attempt_penalty
