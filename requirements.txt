@@ -1,29 +1,145 @@
 # Core dependencies for Graduation Scanner
 
-# Computer Vision and Image Processing
-opencv-python>=4.8.0
-opencv-contrib-python>=4.8.0
-Pillow>=10.0.0
+# =============================================
+# REQUIRED DEPENDENCIES
+# =============================================
 
-# Face Recognition
+# Computer Vision and Image Processing
+opencv-python>=4.8.0,<5.0.0
+opencv-contrib-python>=4.8.0,<5.0.0
+Pillow>=10.0.0,<11.0.0
+
+# Face Recognition and Deep Learning
 insightface>=0.7.3
-onnxruntime>=1.15.0
+onnxruntime>=1.15.0,<2.0.0
+
+# Deep Learning Framework (for anti-spoofing)
+tensorflow>=2.13.0,<3.0.0
+tf-keras>=2.13.0,<3.0.0
 
 # Scientific Computing
-numpy>=1.24.0
+numpy>=1.24.0,<2.0.0
+pandas>=2.0.0,<3.0.0
 
 # QR Code Processing
-qrcode>=7.4.2
-pyzbar>=0.1.9
-# Note: pyzbar requires zbar library to be installed on system
+qrcode>=7.4.2,<8.0.0
+pyzbar>=0.1.9,<1.0.0
+# Note: pyzbar requires system zbar library:
 # Ubuntu/Debian: sudo apt-get install libzbar0
 # macOS: brew install zbar
 # Windows: Download from http://zbar.sourceforge.net/download.html
 
-# Optional for Text-to-Speech announcements
-pyttsx3>=2.90
+# File Handling and Downloads
+gdown>=4.7.1,<5.0.0
 
-# Development dependencies (optional)
+# Date and Time Handling
+python-dateutil>=2.8.0,<3.0.0
+
+# =============================================
+# GUI AND USER INTERFACE
+# =============================================
+
+# GUI Framework (built into Python, but ensuring compatibility)
+# tkinter is included with Python but may need system packages on some Linux distros:
+# Ubuntu/Debian: sudo apt-get install python3-tk
+
+# =============================================
+# REPORTING AND EXPORT DEPENDENCIES
+# =============================================
+
+# PDF Generation and Reporting
+reportlab>=4.0.0,<5.0.0
+matplotlib>=3.7.0,<4.0.0
+
+# Excel Export Support
+openpyxl>=3.1.0,<4.0.0
+
+# =============================================
+# OPTIONAL DEPENDENCIES
+# =============================================
+
+# Text-to-Speech (Optional - for announcements)
+pyttsx3>=2.90,<3.0.0
+
+# =============================================
+# DEVELOPMENT DEPENDENCIES (Optional)
+# =============================================
+# Uncomment these if you're developing/testing the application
+
 # pytest>=7.4.0
 # black>=23.0.0
 # pylint>=2.17.0
+# mypy>=1.5.0
+
+# =============================================
+# SYSTEM COMPATIBILITY
+# =============================================
+
+# For older Python versions (not needed for Python 3.8+)
+pathlib2>=2.3.7; python_version < "3.4"
+
+# =============================================
+# INSTALLATION NOTES
+# =============================================
+
+# 1. Install system dependencies first:
+#    - For zbar (QR code reading):
+#      Ubuntu/Debian: sudo apt-get install libzbar0
+#      macOS: brew install zbar
+#      Windows: Download from http://zbar.sourceforge.net/download.html
+#    
+#    - For tkinter (GUI framework):
+#      Ubuntu/Debian: sudo apt-get install python3-tk (if not already installed)
+#      Most other systems include tkinter by default
+#    
+#    - For audio (TTS functionality):
+#      Most systems have this by default
+#      Linux: sudo apt-get install espeak espeak-data (if needed)
+
+# 2. Install Python dependencies:
+#    pip install -r requirements.txt
+
+# 3. For GPU acceleration (optional):
+#    If you have a CUDA-compatible GPU, you can install TensorFlow GPU:
+#    pip install tensorflow[and-cuda]>=2.13.0
+#    Visit https://www.tensorflow.org/install/gpu for detailed GPU setup
+
+# 4. Verify installation:
+#    python -c "import tensorflow as tf; print('TensorFlow version:', tf.__version__)"
+#    python -c "import cv2; print('OpenCV version:', cv2.__version__)"
+#    python -c "import insightface; print('InsightFace available')"
+#    python -c "import tkinter; print('tkinter available')"
+
+# =============================================
+# TROUBLESHOOTING
+# =============================================
+
+# Common issues and solutions:
+
+# 1. TensorFlow installation issues:
+#    - For Apple Silicon Macs: pip install tensorflow-macos
+#    - For older CPUs: pip install tensorflow-cpu
+
+# 2. OpenCV issues:
+#    - If opencv-python conflicts, try: pip install --force-reinstall opencv-python
+
+# 3. InsightFace model download:
+#    - Models download automatically on first use
+#    - Ensure internet connection for initial setup
+#    - Models are cached in ~/.insightface/
+
+# 4. pyzbar not working:
+#    - Ensure system zbar library is installed (see notes above)
+#    - On Windows, you may need to add zbar to PATH
+
+# 5. tkinter issues:
+#    - Ubuntu/Debian: sudo apt-get install python3-tk
+#    - If using pyenv: ensure Python was compiled with tkinter support
+
+# 6. Memory issues:
+#    - Use CPU-only TensorFlow: pip install tensorflow-cpu
+#    - Reduce image sizes in config.py if needed
+
+# 7. Visual feedback not working:
+#    - Ensure all GUI dependencies are properly installed
+#    - Check for any import errors in the application logs

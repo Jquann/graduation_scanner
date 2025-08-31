@@ -1,6 +1,6 @@
 # Graduation Scanner - Modular Architecture
 
-An intelligent face recognition system for graduation ceremonies, now refactored into a clean, maintainable modular architecture.
+An intelligent face recognition system for graduation ceremonies with anti-spoofing capabilities, now refactored into a clean, maintainable modular architecture.
 
 ## 🏗️ Project Structure
 
@@ -23,6 +23,15 @@ graduation_scanner/
 │   ├── scanning_tab.py       # Real-time recognition interface
 │   └── management_tab.py     # Student management interface
 │
+├── DeepFaceModel/            # Anti-spoofing models
+│   ├── __init__.py
+│   ├── FasNet.py            # Fasnet anti-spoofing implementation
+│   ├── FasNetBackbone.py    # Fasnet model architecture
+│   ├── folder_utils.py      # Folder management utilities
+│   ├── logger.py            # Logging utilities
+│   ├── package_utils.py     # Package validation utilities
+│   └── weight_utils.py      # Model weight management
+│
 ├── graduation_data/          # Data directory (auto-created)
 │   ├── photos/              # Student photos
 │   ├── qrcodes/             # Generated QR codes
@@ -36,11 +45,17 @@ graduation_scanner/
 
 ### Prerequisites
 
-1. Python 3.8 or higher
-2. System dependencies for pyzbar:
+1. **Python 3.8 or higher**
+2. **System dependencies for pyzbar:**
    - **Ubuntu/Debian**: `sudo apt-get install libzbar0`
    - **macOS**: `brew install zbar`
-   - **Windows**: Download from [zbar website](http://zbar.sourceforge.net/download.html)
+   - **Windows**: Download and install from [zbar website](http://zbar.sourceforge.net/download.html)
+3. **TensorFlow** (for anti-spoofing functionality)
+   - **CPU version**: `pip install tensorflow>=2.13.0 tf-keras>=2.13.0`
+   - **GPU version**: Visit [TensorFlow website](https://www.tensorflow.org/install) for GPU-specific installation
+4. **System audio** (for text-to-speech functionality)
+   - Most systems have this by default
+   - Linux users may need: `sudo apt-get install espeak espeak-data`
 
 ### Setup
 
@@ -50,6 +65,15 @@ graduation_scanner/
 
 ```bash
 pip install -r requirements.txt
+```
+
+4. **For TensorFlow** (required for anti-spoofing):
+```bash
+# CPU version (recommended for most users)
+pip install tensorflow>=2.13.0 tf-keras>=2.13.0
+
+# Or GPU version if you have CUDA-compatible GPU
+# Follow TensorFlow GPU installation guide
 ```
 
 ## 💻 Usage
@@ -77,14 +101,6 @@ python main.py --mode balanced
 python main.py --mode high_performance
 ```
 
-### Debug Mode
-
-Enable verbose output for troubleshooting:
-
-```bash
-python main.py --debug
-```
-
 ## 📁 Module Descriptions
 
 ### Core Modules
@@ -100,108 +116,151 @@ python main.py --debug
 - Performance statistics tracking
 
 #### `database.py`
-- Student data persistence
-- CRUD operations
-- Backup and restore functionality
-- Photo and QR code management
+- Student data persistence with JSON format
+- CRUD operations for student records
+- Photo and QR code file management
+- Data validation and backup functionality
 
 #### `face_recognition.py`
-- InsightFace model wrapper
-- Face detection and encoding extraction
+- InsightFace model wrapper for face detection and recognition
+- Face encoding extraction using buffalo_l model
 - Similarity calculation algorithms
-- Dynamic threshold adjustment
+- Integration with anti-spoofing detection
 
 #### `qr_manager.py`
 - QR code generation and decoding
-- QR data persistence with timeout
-- Attempt tracking and history
-- QR status management
+- Student ID validation through QR codes
+- QR data persistence and timeout management
+- Image-based QR code detection
 
 #### `camera_worker.py`
 - Multi-threaded camera capture
-- Asynchronous face detection
-- Performance optimization
-- Queue-based communication
+- Real-time face detection processing
+- Performance-optimized frame handling
+- Queue-based communication with GUI
 
 #### `face_matching.py`
-- Face matching logic
-- Buffer management
-- Consecutive match confirmation
-- Result processing
+- Face matching logic with configurable thresholds
+- Buffer management for consecutive matches
+- Integration with QR validation system
+- Result processing and logging
+
+### Anti-Spoofing Module (`DeepFaceModel/`)
+
+#### `FasNet.py`
+- Main anti-spoofing engine using MiniFASNet models
+- Real-time spoofing detection
+- TensorFlow-based model inference
+
+#### `FasNetBackbone.py`
+- Neural network architectures for spoofing detection
+- MiniFASNetV1SE and MiniFASNetV2 implementations
+- Squeeze-and-Excitation modules
+
+#### Utility Modules
+- `logger.py`: Centralized logging system
+- `folder_utils.py`: Directory management
+- `package_utils.py`: Dependency validation
+- `weight_utils.py`: Model weight download and management
 
 ### GUI Modules
 
 #### `gui/main_window.py`
-- Main application window
+- Main application window with tabbed interface
 - Menu bar and status bar
-- Tab container management
-- Application lifecycle
+- Application lifecycle management
+- Performance mode display
 
 #### `gui/registration_tab.py`
-- Student registration form
-- Photo capture/selection
-- Input validation
-- Registration workflow
+- Student registration form with validation
+- Photo capture/selection functionality
+- Student ID format validation (11AAA11111)
+- Face detection verification
 
 #### `gui/scanning_tab.py`
-- Real-time recognition interface
-- QR input methods (manual, image)
-- Recognition results display
-- Status indicators
+- Real-time recognition interface with enhanced visual feedback
+- QR input methods (manual entry, image upload)
+- Live camera feed with face detection overlays
+- Comprehensive recognition status indicators
+- Automatic attendance marking on successful recognition
+- Visual feedback for recognition attempts, success, and failures
+- Progress tracking for matching attempts
 
 #### `gui/management_tab.py`
-- Student list view
-- CRUD operations
-- Student details viewer
-- Database statistics
+- Student database management
+- Search, filter, and sorting functionality
+- Data export/import (CSV, JSON, Excel)
+- Attendance report generation with charts
 
 ## 🎯 Features
 
-### QR Persistence
-- QR data persists for configurable timeout (30-60 seconds)
-- Multiple face matching attempts
-- Dynamic similarity threshold adjustment
-- Manual override options
+### Enhanced Student Management
+- Comprehensive student registration with photo capture
+- Student ID validation (format: 11AAA11111)
+- Faculty and graduation level tracking
+- Attendance status management
 
-### Performance Optimization
-- Dual-frequency processing (display vs detection)
-- Asynchronous face detection
-- Configurable buffer sizes
-- CPU usage optimization
+### Face Recognition System
+- InsightFace buffalo_l model for accurate recognition
+- Real-time face detection and matching
+- Configurable similarity thresholds
+- Performance optimization for different system capabilities
 
-### User-Friendly Interface
-- Tabbed interface for different functions
-- Real-time status indicators
-- Visual feedback for face detection
-- Comprehensive result display
+### Anti-Spoofing Protection
+- TensorFlow-based MiniFASNet models
+- Real-time spoofing detection during recognition
+- Configurable spoofing sensitivity
+- Live face validation
+
+### QR Code Integration
+- Automatic QR code generation for each student
+- QR-based student lookup and validation
+- Support for manual QR entry and image upload
+- QR code timeout and attempt tracking
+
+### Enhanced Visual Feedback System
+- Real-time recognition status indicators
+- Live accuracy percentage display
+- Student information overlay
+- Progress tracking for matching attempts
+- Color-coded status messages (green for success, orange for attempts, red for errors)
+- Interactive feedback with contextual tips and instructions
+- Automatic attendance marking on successful recognition
+
+### Data Management
+- JSON-based database with backup functionality
+- Export to multiple formats (CSV, JSON, Excel)
+- Import from CSV and JSON files
+
+### Reporting and Analytics
+- PDF attendance reports with charts
+- Faculty-wise attendance statistics
+- Visual analytics with matplotlib integration
+- Print-ready QR codes
+
+### Text-to-Speech Announcements
+- Automated name announcements during recognition
+- Faculty and graduation level reading
+- Configurable voice settings
 
 ## 🔧 Configuration
 
 ### Performance Profiles
 
-| Mode | Detection FPS | Display FPS | QR Timeout | Max Attempts |
-|------|--------------|-------------|------------|--------------|
-| low_cpu | 1 | 25 | 30s | 15 |
-| balanced | 2 | 30 | 45s | 25 |
-| high_performance | 5 | 30 | 60s | 40 |
+| Mode | Detection FPS | Display FPS | Buffer Size | Anti-Spoofing |
+|------|--------------|-------------|-------------|---------------|
+| low_cpu | 1 | 25 | Small | Enabled |
+| balanced | 2 | 30 | Medium | Enabled |
+| high_performance | 5 | 30 | Large | Enabled |
 
 ### Customization
 
 Edit `config.py` to customize:
-- Detection parameters
-- GUI settings
-- File paths
-- Threshold values
-
-## 📊 Benefits of Modular Architecture
-
-1. **Separation of Concerns**: Each module has a single, clear responsibility
-2. **Easier Testing**: Components can be tested independently
-3. **Better Collaboration**: Multiple developers can work on different modules
-4. **Reusability**: Modules can be reused in other projects
-5. **Maintainability**: Bugs are easier to locate and fix
-6. **Scalability**: New features can be added without affecting existing code
-7. **Cleaner Code**: Improved readability and organization
+- Detection parameters and thresholds
+- GUI settings and window sizes
+- File paths and directory structure
+- Performance parameters
+- Anti-spoofing sensitivity
 
 ## 🔄 Migration from Monolithic Version
 
@@ -210,46 +269,60 @@ To migrate from the original single-file version:
 1. Backup your existing `graduation_data` folder
 2. Install the modular version in a new directory
 3. Copy your `graduation_data` folder to the new location
-4. Run the application - it will automatically use existing data
+4. Install additional dependencies (TensorFlow for anti-spoofing)
+5. Run the application - it will automatically use existing data
 
 ## 🐛 Troubleshooting
 
 ### Common Issues
 
-1. **Camera not detected**: Check camera index in Camera Settings
-2. **Face detection slow**: Switch to `low_cpu` mode
-3. **Import errors**: Ensure all dependencies are installed
-4. **QR decode errors**: Install system zbar library
+1. **Face detection slow**: Switch to `low_cpu` mode or reduce detection frequency
+2. **Import errors**: Ensure all dependencies are installed, especially TensorFlow
+3. **QR decode errors**: Install system zbar library (see Prerequisites)
+4. **TensorFlow not found**: Install TensorFlow using: `pip install tensorflow>=2.13.0`
+5. **Anti-spoofing disabled**: Ensure TensorFlow is properly installed and models can be loaded
+6. **TTS not working**: Check pyttsx3 installation and system audio configuration
+7. **Export/Import errors**: Ensure openpyxl is installed for Excel functionality
+8. **Student ID validation**: Use format 11AAA11111 (2 digits + 3 letters + 5 digits)
+9. **Attendance not updating**: Ensure database permissions are correct and storage is available
 
-### Debug Mode
+### Performance Issues
 
-Run with `--debug` flag for detailed error messages:
-
-```bash
-python main.py --debug
-```
+- For older systems: Use `low_cpu` mode and reduce camera resolution
+- For memory issues: Reduce buffer sizes in configuration
+- For slow recognition: Check face image quality and lighting conditions
 
 ## 📝 License
 
 This project is provided as-is for educational and commercial use.
 
-## 🤝 Contributing
-
-To extend the functionality:
-
-1. Add new modules in appropriate directories
-2. Follow the existing naming conventions
-3. Update imports in `__init__.py` files
-4. Document new features in README
-
 ## 📞 Support
 
 For issues or questions:
-1. Check the User Guide in Help menu
-2. Run in debug mode for detailed errors
-3. Review module documentation in code comments
+1. Check the troubleshooting section above
+2. Review module documentation in code comments
+3. Ensure all system dependencies are properly installed
+4. Check TensorFlow installation for anti-spoofing issues
+5. Verify camera permissions and availability
+
+## 📋 System Requirements
+
+### Minimum Requirements
+- Python 3.8+
+- 4GB RAM
+- 2GB free disk space
+- USB/Built-in camera
+- Audio output device (for TTS)
+
+### Recommended Requirements
+- Python 3.9+
+- 8GB RAM
+- 4GB free disk space
+- HD camera (720p or better)
+- Good lighting conditions for face recognition
 
 ---
 
-**Version**: 1.0.0  
-**Last Updated**: 2025
+**Version**: 1.1.0  
+**Last Updated**: 2025  
+**Features**: Face Recognition, Anti-Spoofing, QR Validation, TTS Announcements, Data Management, Enhanced Visual Feedback
