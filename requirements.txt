@@ -29,6 +29,13 @@ pyzbar>=0.1.9,<1.0.0
 # macOS: brew install zbar
 # Windows: Download from http://zbar.sourceforge.net/download.html
 
+# Image Processing and Graphics (for certificate display)
+# Note: PIL (Pillow) is already included above but specifically needed for:
+# - Certificate background generation
+# - Text rendering and font handling
+# - Image drawing and canvas operations
+# - Dynamic certificate creation
+
 # File Handling and Downloads
 gdown>=4.7.1,<5.0.0
 
@@ -43,6 +50,9 @@ python-dateutil>=2.8.0,<3.0.0
 # tkinter is included with Python but may need system packages on some Linux distros:
 # Ubuntu/Debian: sudo apt-get install python3-tk
 
+# For enhanced GUI components and certificate display
+# Note: tkinter Canvas and PIL integration handled by core dependencies above
+
 # =============================================
 # REPORTING AND EXPORT DEPENDENCIES
 # =============================================
@@ -55,11 +65,18 @@ matplotlib>=3.7.0,<4.0.0
 openpyxl>=3.1.0,<4.0.0
 
 # =============================================
+# AUDIO AND SPEECH DEPENDENCIES
+# =============================================
+
+# Text-to-Speech (for ceremony announcements)
+pyttsx3>=2.90,<3.0.0
+
+# =============================================
 # OPTIONAL DEPENDENCIES
 # =============================================
 
-# Text-to-Speech (Optional - for announcements)
-pyttsx3>=2.90,<3.0.0
+# Enhanced QR Code generation with better image quality
+qrcode[pil]>=7.4.2,<8.0.0
 
 # =============================================
 # DEVELOPMENT DEPENDENCIES (Optional)
@@ -95,6 +112,10 @@ pathlib2>=2.3.7; python_version < "3.4"
 #    - For audio (TTS functionality):
 #      Most systems have this by default
 #      Linux: sudo apt-get install espeak espeak-data (if needed)
+#
+#    - For font rendering (certificate display):
+#      Most systems have adequate fonts by default
+#      Linux users may want: sudo apt-get install fonts-liberation fonts-dejavu
 
 # 2. Install Python dependencies:
 #    pip install -r requirements.txt
@@ -109,6 +130,24 @@ pathlib2>=2.3.7; python_version < "3.4"
 #    python -c "import cv2; print('OpenCV version:', cv2.__version__)"
 #    python -c "import insightface; print('InsightFace available')"
 #    python -c "import tkinter; print('tkinter available')"
+#    python -c "from PIL import Image, ImageDraw, ImageFont; print('PIL/Pillow available for certificates')"
+
+# =============================================
+# CERTIFICATE DISPLAY REQUIREMENTS
+# =============================================
+
+# The certificate display system requires:
+# 1. Pillow (PIL) - for image generation and text rendering
+# 2. tkinter - for GUI canvas and display window
+# 3. System fonts - for professional text rendering
+# 4. Adequate display resolution - minimum 1024x768, recommended 1920x1080
+
+# Certificate display features:
+# - Dynamic certificate generation with student data
+# - Professional styling with decorative elements
+# - Fullscreen presentation mode for ceremonies
+# - Real-time integration with face recognition system
+# - Responsive design for different screen sizes
 
 # =============================================
 # TROUBLESHOOTING
@@ -140,6 +179,41 @@ pathlib2>=2.3.7; python_version < "3.4"
 #    - Use CPU-only TensorFlow: pip install tensorflow-cpu
 #    - Reduce image sizes in config.py if needed
 
-# 7. Visual feedback not working:
+# 7. Certificate display issues:
+#    - PIL/Pillow font errors: Install system fonts or use default fonts
+#    - Canvas rendering issues: Ensure adequate system memory
+#    - Fullscreen problems: Check display driver compatibility
+
+# 8. Visual feedback not working:
 #    - Ensure all GUI dependencies are properly installed
 #    - Check for any import errors in the application logs
+#    - Verify tkinter Canvas and PIL integration
+
+# 9. QR Code generation with PIL:
+#    - qrcode[pil] provides better image quality for generated QR codes
+#    - Fallback to basic qrcode if PIL integration fails
+
+# 10. Font rendering issues:
+#     - System may need additional fonts for professional certificate display
+#     - Linux: sudo apt-get install fonts-liberation fonts-dejavu
+#     - Windows/macOS: Uses system default fonts (usually adequate)
+
+# =============================================
+# PERFORMANCE CONSIDERATIONS
+# =============================================
+
+# For optimal performance during ceremonies:
+
+# 1. Certificate Display:
+#    - Ensure adequate RAM (8GB+ recommended for smooth certificate rendering)
+#    - Use dedicated graphics if available for better canvas performance
+#    - Close unnecessary applications to free system resources
+
+# 2. Face Recognition:
+#    - Balance CPU/GPU usage based on available hardware
+#    - Consider using performance modes in the application
+
+# 3. System Resources:
+#    - Monitor memory usage during extended ceremony sessions
+#    - Ensure stable power supply for uninterrupted operation
+#    - Test all components before actual ceremony events
