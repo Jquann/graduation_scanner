@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-QR code management functionality
+QR code management functionality with database validation
 """
 
 import cv2
@@ -15,11 +15,16 @@ from models import QRData
 
 
 class QRCodeManager:
-    """Manages QR code operations"""
+    """Manages QR code operations with database validation"""
     
-    def __init__(self, performance_config: dict):
+    def __init__(self, performance_config: dict, database=None):
         self.config = performance_config
         self.current_qr: Optional[QRData] = None
+        self.database = database  # Database reference for validation
+    
+    def set_database(self, database):
+        """Set database reference for QR validation"""
+        self.database = database
     
     def generate_qr_code(self, data: str, save_path: Optional[str] = None) -> Image.Image:
         """Generate a QR code image"""
@@ -82,14 +87,23 @@ class QRCodeManager:
             return []
     
     def set_current_qr(self, data: str, source: str):
-        """Set the current QR data with persistence tracking"""
-        self.current_qr = QRData(
-            data=data,
-            source=source,
-            load_time=time.time(),
-            attempt_count=0,
-            match_history=[]
-        )
+        """Set the current QR data with validation and persistence tracking"""
+        # First validate the QR code against database
+        validation_result = self.validate_qr_data(data)
+        
+        if validation_result['is_valid']:
+            self.current_qr = QRData(
+                data=data.strip().upper(),  # Normalize the data
+                source=source,
+                load_time=time.time(),
+                attempt_count=0,
+                match_history=[]
+            )
+            print(f"✅ Valid QR code set: {data} from {source}")
+        else:
+            print(f"❌ Invalid QR code rejected: {validation_result['error_message']}")
+            # Optionally, you might want to store invalid QR attempts for logging
+            self.current_qr = None
     
     def clear_current_qr(self):
         """Clear the current QR data"""
@@ -151,15 +165,48 @@ class QRCodeManager:
             return self.current_qr.match_history
         return []
     
-    def validate_qr_data(self, data: str) -> bool:
-        """Validate QR data format"""
-        # Add validation logic based on your requirements
-        # For example, check if it's a valid student ID format
-        if not data or len(data) == 0:
-            return False
+    def validate_qr_data(self, data: str) -> dict:
+        """
+        Enhanced QR data validation with database checking
         
-        # Add more validation rules as needed
-        return True
+        Args:
+            data (str): QR code data to validate
+            
+        Returns:
+            dict: Validation result with detailed information
+        """
+        # Basic format validation
+        if not data or len(data.strip()) == 0:
+            return {
+                'is_valid': False,
+                'error_message': 'QR code is empty',
+                'error_type': 'EMPTY_QR',
+                'student_data': None
+            }
+        
+        # Length check (assuming student ID has reasonable length limits)
+        data = data.strip()
+        if len(data) < 3 or len(data) > 20:  # Adjust as needed
+            return {
+                'is_valid': False,
+                'error_message': f'QR code length invalid ({len(data)} characters)',
+                'error_type': 'INVALID_LENGTH',
+                'student_data': None
+            }
+        
+        # Database validation if database is available
+        if self.database:
+            db_validation = self.database.validate_qr_code(data)
+            return db_validation
+        else:
+            # Fallback validation without database
+            print("⚠️ Database not available for QR validation")
+            return {
+                'is_valid': True,  # Assume valid if no database
+                'error_message': None,
+                'error_type': None,
+                'student_data': None
+            }
     
     def get_qr_status_info(self) -> dict:
         """Get comprehensive QR status information"""
@@ -173,7 +220,8 @@ class QRCodeManager:
                 'attempt_count': 0,
                 'max_attempts': self.config['max_match_attempts'],
                 'is_expired': True,
-                'is_max_attempts': False
+                'is_max_attempts': False,
+                'validation_status': 'NO_QR'
             }
         
         elapsed = time.time() - self.current_qr.load_time
@@ -189,18 +237,44 @@ class QRCodeManager:
             'max_attempts': self.config['max_match_attempts'],
             'is_expired': self.is_qr_expired(),
             'is_max_attempts': self.is_max_attempts_reached(),
-            'match_history': self.current_qr.match_history
+            'match_history': self.current_qr.match_history,
+            'validation_status': 'VALID'
         }
     
+    def get_validation_error_message(self, error_type: str) -> str:
+        """Get user-friendly error messages for different validation errors"""
+        error_messages = {
+            'EMPTY_QR': 'Please scan a valid QR code',
+            'INVALID_LENGTH': 'QR code format is invalid',
+            'STUDENT_NOT_FOUND': 'Student not found in database. Please check the QR code.',
+            'DATABASE_ERROR': 'Database error occurred during validation'
+        }
+        return error_messages.get(error_type, 'Unknown validation error')
+    
     def draw_qr_overlay(self, frame: np.ndarray, qr_codes: List[Tuple[str, List[int]]]):
-        """Draw QR code overlays on frame with bounding boxes"""
+        """Draw QR code overlays on frame with bounding boxes and validation status"""
         for qr_data, bbox in qr_codes:
+            # Validate QR code
+            validation = self.validate_qr_data(qr_data)
+            
+            # Choose color based on validation
+            if validation['is_valid']:
+                color = (0, 255, 0)  # Green for valid
+                status = "✅ Valid"
+            else:
+                color = (0, 0, 255)  # Red for invalid
+                status = f"❌ {validation['error_type']}"
+            
             # Draw bounding box
             x1, y1, x2, y2 = bbox
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
             
             # Add QR data text
-            cv2.putText(frame, f"QR: {qr_data}", (x1, y1 - 10),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            cv2.putText(frame, f"QR: {qr_data}", (x1, y1 - 30),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+            
+            # Add validation status
+            cv2.putText(frame, status, (x1, y1 - 10),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
         
         return frame

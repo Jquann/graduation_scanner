@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-This module implements the core face matching logic for recognition.
+This module implements the core face matching logic for recognition with enhanced QR validation.
 It handles collecting face encodings, comparing them against a student database,
 and managing the matching state based on QR code data and recognition attempts.
 """
@@ -19,7 +19,7 @@ from database import StudentDatabase
 
 class FaceMatcher:
     """
-    Manages the face matching process, including buffering face encodings,
+    Manages the face matching process with enhanced QR validation, including buffering face encodings,
     performing similarity calculations, and determining successful matches
     based on dynamic thresholds and consecutive match criteria.
     """
@@ -38,6 +38,9 @@ class FaceMatcher:
         self.config = config
         self.database = StudentDatabase() # Initialize the student database connection
         
+        # Provide database reference to QR manager for validation
+        self.qr_manager.set_database(self.database)
+        
         # State variables for managing the matching process
         self.face_encodings_buffer = [] # Stores recent face encodings
         self.last_match_time = 0        # Timestamp of the last matching attempt
@@ -48,7 +51,7 @@ class FaceMatcher:
     
     def process_encodings(self, face_queue: queue.Queue, result_queue: queue.Queue):
         """
-        Main processing loop for face encodings.
+        Main processing loop for face encodings with enhanced QR validation.
         It collects new encodings, cleans expired ones, and triggers matching if conditions are met.
 
         Args:
@@ -142,8 +145,8 @@ class FaceMatcher:
     
     def _perform_matching(self, result_queue: queue.Queue, current_time: float):
         """
-        Executes the face matching process against the student database.
-        It retrieves student data, calculates similarity, applies dynamic thresholds,
+        Executes the enhanced face matching process against the student database with QR validation.
+        It validates QR data, retrieves student data, calculates similarity, applies dynamic thresholds,
         and reports results to the result queue.
 
         Args:
@@ -154,19 +157,37 @@ class FaceMatcher:
         if not qr_data:
             return # Should not happen if _should_perform_matching was True
         
-        # Find the student in the database using the QR code data (student ID)
-        student = self.database.find_student_by_id(qr_data.data)
+        # Enhanced QR validation before attempting face matching
+        validation_result = self.database.validate_qr_code(qr_data.data)
         
-        if not student:
-            # If student is not found, report it and increment attempt count
+        if not validation_result['is_valid']:
+            # Handle invalid QR code - report appropriate error
             if self.qr_manager.get_attempt_count() == 0:
                 self.qr_manager.increment_attempt()
-                result_queue.put(("student_not_found", {
-                    "student_id": qr_data.data,
-                    "timestamp": datetime.now().strftime("%H:%M:%S")
-                }))
+                
+                # Send specific error message based on validation result
+                if validation_result['error_type'] == 'STUDENT_NOT_FOUND':
+                    result_queue.put(("qr_validation_failed", {
+                        "error_type": validation_result['error_type'],
+                        "error_message": validation_result['error_message'],
+                        "qr_code": qr_data.data,
+                        "timestamp": datetime.now().strftime("%H:%M:%S"),
+                        "suggestion": "Please check if the QR code is correct and try again."
+                    }))
+                else:
+                    result_queue.put(("qr_validation_failed", {
+                        "error_type": validation_result['error_type'],
+                        "error_message": validation_result['error_message'],
+                        "qr_code": qr_data.data,
+                        "timestamp": datetime.now().strftime("%H:%M:%S"),
+                        "suggestion": "Please scan a valid QR code."
+                    }))
+            
             self.last_match_time = current_time # Update last match time to respect cooldown
             return
+        
+        # Get student data from validation result (already validated)
+        student = validation_result['student_data']
         
         # Increment the attempt counter for the current QR code
         self.qr_manager.increment_attempt()
@@ -222,6 +243,9 @@ class FaceMatcher:
                     total_attempts=self.qr_manager.get_attempt_count()
                 )
                 
+                # Update student attendance in database
+                self.database.update_student_attendance(student["student_id"])
+                
                 # Put the successful match result into the queue
                 result_queue.put(("match_found", result.to_display_dict()))
                 
@@ -255,7 +279,7 @@ class FaceMatcher:
     def force_match(self, student_id: str) -> Optional[RecognitionResult]:
         """
         Forces a manual match for a student, bypassing the normal recognition process.
-        This is typically used for administrative overrides or testing.
+        This includes QR validation to ensure the student exists.
 
         Args:
             student_id (str): The ID of the student to force match.
@@ -264,10 +288,17 @@ class FaceMatcher:
             Optional[RecognitionResult]: A RecognitionResult object if the student is found,
                                         otherwise None.
         """
-        student = self.database.find_student_by_id(student_id)
+        # Validate student exists in database
+        validation_result = self.database.validate_qr_code(student_id)
         
-        if not student:
-            return None # Student not found in the database
+        if not validation_result['is_valid']:
+            print(f"Force match failed: {validation_result['error_message']}")
+            return None
+        
+        student = validation_result['student_data']
+        
+        # Update attendance for forced match
+        self.database.update_student_attendance(student_id)
         
         # Create a RecognitionResult object with overridden values for a forced match
         result = RecognitionResult(
@@ -281,6 +312,9 @@ class FaceMatcher:
             total_attempts=0,       # No attempts made through normal process
             manual_override=True    # Flag indicating a manual override
         )
+        
+        # Announce the manually matched student
+        self._announce_name(student["name"], student["faculty"], student["graduation_level"])
         
         return result
     
@@ -313,13 +347,13 @@ class FaceMatcher:
             if message is None: # Sentinel value to stop the thread
                 break
             print(f"Announcing: {message}") # Print for verification
-            pyttsx3.speak(message)
+            try:
+                pyttsx3.speak(message)
+            except Exception as e:
+                print(f"TTS Error: {e}")
             self.tts_queue.task_done()
 
     def reset_state(self):
-        # Stop the TTS thread when resetting state or application shutdown
-        self.tts_queue.put(None) # Send sentinel to stop the thread
-        self.tts_thread.join(timeout=1.0) # Wait for the thread to finish
         """
         Resets the internal matching state variables.
         This is typically called when a new QR code is scanned or after a successful match
@@ -328,3 +362,32 @@ class FaceMatcher:
         self.face_encodings_buffer.clear() # Clear all buffered encodings
         self.consecutive_matches = 0    # Reset consecutive match count
         self.last_match_time = 0        # Reset last match time
+    
+    def get_validation_stats(self) -> dict:
+        """
+        Get statistics about QR validation and matching attempts.
+        
+        Returns:
+            dict: Statistics including validation success/failure rates
+        """
+        return {
+            'database_students': self.database.get_student_count(),
+            'current_qr_attempts': self.qr_manager.get_attempt_count(),
+            'current_consecutive_matches': self.consecutive_matches,
+            'buffer_size': len(self.face_encodings_buffer)
+        }
+    
+    def shutdown(self):
+        """
+        Properly shutdown the matcher and clean up resources.
+        """
+        # Stop the TTS thread
+        self.tts_queue.put(None) # Send sentinel to stop the thread
+        if self.tts_thread.is_alive():
+            self.tts_thread.join(timeout=2.0) # Wait for the thread to finish
+        
+        # Clear all state
+        self.reset_state()
+        self.qr_manager.clear_current_qr()
+        
+        print("FaceMatcher shutdown completed.")

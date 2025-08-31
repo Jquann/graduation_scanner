@@ -63,6 +63,55 @@ class StudentDatabase:
                 return student
         return None
     
+    # QR Code validation
+    def validate_qr_code(self, qr_code: str) -> Dict[str, Any]:
+        """
+        Validate if QR code exists in database and return validation result
+        
+        Args:
+            qr_code (str): The QR code data to validate
+            
+        Returns:
+            Dict[str, Any]: Validation result containing:
+                - is_valid (bool): Whether QR code exists
+                - student_data (dict): Student data if found
+                - error_message (str): Error message if invalid
+                - error_type (str): Type of error for UI handling
+        """
+        # Strip whitespace and convert to uppercase for consistency
+        qr_code = qr_code.strip().upper()
+        
+        # Check for empty QR code
+        if not qr_code:
+            return {
+                'is_valid': False,
+                'student_data': None,
+                'error_message': 'QR code is empty or invalid',
+                'error_type': 'EMPTY_QR'
+            }
+        
+        # Search for student with matching ID
+        student_data = self.find_student_by_id(qr_code)
+        
+        if student_data:
+            return {
+                'is_valid': True,
+                'student_data': student_data,
+                'error_message': None,
+                'error_type': None
+            }
+        else:
+            return {
+                'is_valid': False,
+                'student_data': None,
+                'error_message': f'Student ID "{qr_code}" not found in database',
+                'error_type': 'STUDENT_NOT_FOUND'
+            }
+    
+    def get_all_qr_codes(self) -> List[str]:
+        """Get all valid QR codes (student IDs) from database"""
+        return [student["student_id"] for student in self.students_data["students"]]
+    
     def update_student(self, student_id: str, updated_data: Dict[str, Any]) -> bool:
         """Update student data"""
         for i, student in enumerate(self.students_data["students"]):
@@ -71,7 +120,6 @@ class StudentDatabase:
                 return self.save_students_data()
         return False
     
-    	
     def update_student_attendance(self, student_id: str) -> bool:
         """Update student's attendance status to Present"""
         for i, student in enumerate(self.students_data["students"]):
@@ -165,7 +213,6 @@ class StudentDatabase:
             faculty = student.get('faculty', 'Unknown')
             faculties[faculty] = faculties.get(faculty, 0) + 1
 
-            	
             # Count attendance status
             attendance = student.get('attendance', 'Pending')
             attendance_counts[attendance] = attendance_counts.get(attendance, 0) + 1
@@ -173,7 +220,8 @@ class StudentDatabase:
         return {
             'total_students': len(students),
             'graduation_levels': graduation_levels,
-            'faculties': faculties
+            'faculties': faculties,
+            'attendance_counts': attendance_counts
         }
     
     def search_students(self, query: str) -> List[Dict[str, Any]]:

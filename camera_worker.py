@@ -344,3 +344,97 @@ class CameraWorker:
         if ret:
             return cv2.flip(frame, 1)
         return None
+
+    def _camera_worker(self):
+        """Camera capture and face detection worker thread with enhanced QR validation"""
+        self.cap = cv2.VideoCapture(Config.CAMERA_INDEX)
+        
+        if not self.cap.isOpened():
+            self.result_queue.put(("error", "Cannot open camera"))
+            return
+        
+        # Set camera parameters
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, Config.CAMERA_WIDTH)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, Config.CAMERA_HEIGHT)
+        self.cap.set(cv2.CAP_PROP_FPS, Config.CAMERA_FPS)
+        
+        # Timing variables
+        last_detection_time = 0
+        detection_interval = 1.0 / self.config['detection_fps']
+        display_interval = 1.0 / self.config['display_fps']
+        last_display_time = time.time()
+        
+        detector = cv2.QRCodeDetector()
+        last_qr_validation_time = 0
+        qr_validation_cooldown = 2.0  # Prevent spam validation
+
+        while self.is_running:
+            current_time = time.time()
+            ret, frame = self.cap.read()
+            
+            if not ret:
+                time.sleep(0.01)
+                continue
+            
+            frame = cv2.flip(frame, 1)  # Mirror flip
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+            # Enhanced QR code detection and validation
+            qr_data, points, _ = detector.detectAndDecode(frame_rgb)
+            if qr_data:
+                # Only validate QR if cooldown period has passed
+                if current_time - last_qr_validation_time > qr_validation_cooldown:
+                    # Validate QR code before setting it
+                    validation_result = self.qr_manager.validate_qr_data(qr_data)
+                    
+                    if validation_result['is_valid']:
+                        # Set valid QR code
+                        self.qr_manager.set_current_qr(qr_data, "Camera Scan")
+                        self.result_queue.put(("qr_scanned", {
+                            "qr_data": qr_data,
+                            "validation_status": "valid",
+                            "student_name": validation_result.get('student_data', {}).get('name', 'Unknown')
+                        }))
+                        print(f"✅ Valid QR scanned: {qr_data}")
+                    else:
+                        # Handle invalid QR code
+                        self.result_queue.put(("qr_validation_failed", {
+                            "qr_data": qr_data,
+                            "error_type": validation_result['error_type'],
+                            "error_message": validation_result['error_message'],
+                            "timestamp": datetime.now().strftime("%H:%M:%S")
+                        }))
+                        print(f"❌ Invalid QR detected: {validation_result['error_message']}")
+                    
+                    last_qr_validation_time = current_time
+            
+            # Face detection (low frequency)
+            should_detect = (
+                current_time - last_detection_time > detection_interval and
+                self.qr_manager.get_current_qr() is not None
+            )
+            
+            if should_detect:
+                self._async_face_detection(frame_rgb.copy(), current_time)
+                last_detection_time = current_time
+            
+            # Prepare display frame
+            display_frame = self._prepare_display_frame(frame_rgb, current_time)
+            
+            # Control display frequency
+            if current_time - last_display_time >= display_interval:
+                # Convert to GUI format
+                pil_image = Image.fromarray(display_frame)
+                pil_image = pil_image.resize(Config.CAMERA_DISPLAY_SIZE)
+                photo = ImageTk.PhotoImage(pil_image)
+                
+                self.result_queue.put(("camera_frame", photo))
+                last_display_time = current_time
+            
+            # Process face detection results
+            self._process_detection_results()
+            
+            # Update performance stats
+            self.performance_stats.update_fps()
+            
+            time.sleep(0.01)
