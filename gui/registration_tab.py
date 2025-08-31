@@ -81,8 +81,8 @@ class RegistrationTab:
         photo_frame = ttk.Frame(form_frame)
         photo_frame.grid(row=4, column=0, columnspan=2, pady=10)
         
-        ttk.Button(photo_frame, text="📁 Choose Photo", command=self.select_photo).pack(side='left', padx=5)
-        ttk.Button(photo_frame, text="📷 Take Photo", command=self.capture_photo).pack(side='left', padx=5)
+        ttk.Button(photo_frame, text="Choose Photo", command=self.select_photo).pack(side='left', padx=5)
+        ttk.Button(photo_frame, text="Take Photo", command=self.capture_photo).pack(side='left', padx=5)
         
         self.photo_label = ttk.Label(form_frame, text="No photo selected")
         self.photo_label.grid(row=5, column=0, columnspan=2, pady=5)
@@ -91,9 +91,9 @@ class RegistrationTab:
         button_frame = ttk.Frame(form_frame)
         button_frame.grid(row=6, column=0, columnspan=2, pady=20)
         
-        ttk.Button(button_frame, text="✅ Register Student", 
+        ttk.Button(button_frame, text="Register Student", 
                   command=self.register_student).pack(side='left', padx=5)
-        ttk.Button(button_frame, text="🔄 Clear Form", 
+        ttk.Button(button_frame, text="Clear Form", 
                   command=self.clear_form).pack(side='left', padx=5)
         
         # Right side: Photo preview
@@ -272,15 +272,23 @@ class RegistrationTab:
 
 
 class PhotoCaptureWindow:
-    """Photo capture window"""
+    """Optimized photo capture window"""
     
     def __init__(self, parent, face_engine):
         self.face_engine = face_engine
         self.captured_photo_path = None
         
+        # Optimization parameters
+        self.update_interval = 60  # 60ms update interval (16-17 FPS)
+        self.face_detection_skip = 4  # Detect face every 4th frame
+        self.status_update_skip = 8  # Update status every 8th frame
+        self.frame_count = 0
+        self.last_face_status = False
+        self.last_faces = []
+        
         # Create window
         self.window = tk.Toplevel(parent)
-        self.window.title("📷 Take Student Photo")
+        self.window.title("Take Student Photo")
         self.window.geometry("700x630")
         self.window.configure(bg='lightgray')
         
@@ -300,7 +308,7 @@ class PhotoCaptureWindow:
         instruction_frame = ttk.Frame(self.window)
         instruction_frame.pack(fill='x', padx=10, pady=5)
         
-        instruction_text = "📋 Position face in the green rectangle, then click 'CAPTURE PHOTO'"
+        instruction_text = "Position face in the green rectangle, then click 'CAPTURE PHOTO'"
         ttk.Label(instruction_frame, text=instruction_text, 
                  foreground="darkblue", font=('Arial', 10, 'bold')).pack()
         
@@ -309,7 +317,7 @@ class PhotoCaptureWindow:
         self.camera_label.pack(padx=10, pady=10)
         
         # Status label
-        self.status_label = ttk.Label(self.window, text="📸 Ready to capture", 
+        self.status_label = ttk.Label(self.window, text="Ready to capture", 
                                       foreground="green", font=('Arial', 12, 'bold'))
         self.status_label.pack(pady=5)
         
@@ -317,82 +325,151 @@ class PhotoCaptureWindow:
         button_frame = ttk.Frame(self.window)
         button_frame.pack(pady=10)
         
-        ttk.Button(button_frame, text="📸 CAPTURE PHOTO", 
-                  command=self.capture_photo).pack(side='left', padx=10)
-        ttk.Button(button_frame, text="❌ Cancel", 
+        self.capture_btn = ttk.Button(button_frame, text="CAPTURE PHOTO", 
+                                     command=self.capture_photo)
+        self.capture_btn.pack(side='left', padx=10)
+        
+        ttk.Button(button_frame, text="Cancel", 
                   command=self.cancel).pack(side='left', padx=10)
         
         self.current_frame = None
         self.cap = None
     
     def start_camera(self):
-        """Start camera capture"""
+        """Start camera capture with optimized settings"""
         self.cap = cv2.VideoCapture(Config.CAMERA_INDEX)
         if not self.cap.isOpened():
             messagebox.showerror("Error", "Cannot open camera")
             self.window.destroy()
             return
         
+        # Optimize camera settings
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        self.cap.set(cv2.CAP_PROP_FPS, 20)
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Reduce buffer to minimize delay
+        
         self.update_camera()
     
     def update_camera(self):
-        """Update camera display"""
-        if not self.cap:
+        """Optimized camera update with reduced processing"""
+        if not self.cap or not self.window.winfo_exists():
             return
         
-        ret, frame = self.cap.read()
-        if ret:
+        try:
+            ret, frame = self.cap.read()
+            if not ret:
+                self.window.after(self.update_interval, self.update_camera)
+                return
+            
+            # Basic processing
             frame = cv2.flip(frame, 1)
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             
-            # Detect faces
-            faces = self.face_engine.get_face_bounding_boxes(frame_rgb)
+            self.frame_count += 1
             
-            if faces:
-                self.status_label.config(text="✅ Face detected - Ready!", foreground="green")
-                for bbox in faces:
+            # Face detection optimization - only every N frames
+            if self.frame_count % self.face_detection_skip == 0:
+                faces = self.face_engine.get_face_bounding_boxes(frame_rgb)
+                self.last_faces = faces
+                self.last_face_status = len(faces) > 0
+            
+            # Draw face rectangles using cached results
+            if self.last_faces:
+                for bbox in self.last_faces:
                     cv2.rectangle(frame_rgb, (bbox[0], bbox[1]), 
                                 (bbox[2], bbox[3]), (0, 255, 0), 3)
-            else:
-                self.status_label.config(text="⚠️ Position face in frame", foreground="orange")
+            elif self.last_face_status:
+                # Draw guide rectangle when no recent detection but face was detected before
+                h, w = frame_rgb.shape[:2]
+                center_x, center_y = w//2, h//2
+                box_size = 200
+                cv2.rectangle(frame_rgb, 
+                            (center_x - box_size//2, center_y - box_size//2),
+                            (center_x + box_size//2, center_y + box_size//2),
+                            (128, 128, 128), 2)
             
-            # Convert to PIL and display
+            # Update status less frequently
+            if self.frame_count % self.status_update_skip == 0:
+                self.update_status()
+            
+            # Display frame
+            self.display_frame(frame_rgb)
+            self.current_frame = frame_rgb
+            
+        except Exception as e:
+            print(f"Camera update error: {e}")
+        
+        # Continue updating
+        if self.window.winfo_exists():
+            self.window.after(self.update_interval, self.update_camera)
+    
+    def update_status(self):
+        """Update status display"""
+        try:
+            if self.last_face_status:
+                self.status_label.config(text="Face detected - Ready!", foreground="green")
+                self.capture_btn.config(state='normal')
+            else:
+                self.status_label.config(text="Position face in frame", foreground="orange")
+                self.capture_btn.config(state='normal')  # Allow capture anyway
+        except:
+            pass
+    
+    def display_frame(self, frame_rgb):
+        """Optimized frame display"""
+        try:
+            # Use faster resampling method
             pil_image = Image.fromarray(frame_rgb)
-            pil_image = pil_image.resize(Config.CAMERA_DISPLAY_SIZE)
+            pil_image = pil_image.resize(Config.CAMERA_DISPLAY_SIZE, Image.Resampling.NEAREST)
             photo = ImageTk.PhotoImage(pil_image)
             
             self.camera_label.configure(image=photo)
             self.camera_label.image = photo
-            
-            self.current_frame = frame_rgb
-        
-        if self.window.winfo_exists():
-            self.window.after(30, self.update_camera)
+        except Exception as e:
+            print(f"Display frame error: {e}")
     
     def capture_photo(self):
-        """Capture current frame"""
+        """Capture current frame with improved responsiveness"""
         if self.current_frame is None:
             messagebox.showwarning("Warning", "No frame available")
             return
         
-        # Verify face exists
-        faces = self.face_engine.get_face_bounding_boxes(self.current_frame)
-        if not faces:
-            messagebox.showwarning("Warning", "No face detected. Please position face properly.")
-            return
+        # Temporarily disable capture button to prevent double-clicks
+        self.capture_btn.config(state='disabled', text='Capturing...')
+        self.window.update()
         
-        # Save photo with temp prefix for cleanup
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        temp_path = f"temp_capture_{timestamp}.jpg"
-        
-        frame_bgr = cv2.cvtColor(self.current_frame, cv2.COLOR_RGB2BGR)
-        cv2.imwrite(temp_path, frame_bgr)
-        
-        self.captured_photo_path = temp_path
-        
-        self.cleanup_camera()
-        self.window.destroy()
-        messagebox.showinfo("Success", "Photo captured successfully!")
+        try:
+            # Real-time face detection for current frame to ensure accuracy
+            faces = self.face_engine.get_face_bounding_boxes(self.current_frame)
+            if not faces:
+                result = messagebox.askyesno("Warning", 
+                    "No face clearly detected in current frame.\nDo you want to capture anyway?")
+                if not result:
+                    self.capture_btn.config(state='normal', text='CAPTURE PHOTO')
+                    return
+            
+            # Stop camera to free resources during save operation
+            self.cleanup_camera()
+            
+            # Save photo
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            temp_path = f"temp_capture_{timestamp}.jpg"
+            
+            frame_bgr = cv2.cvtColor(self.current_frame, cv2.COLOR_RGB2BGR)
+            success = cv2.imwrite(temp_path, frame_bgr, [cv2.IMWRITE_JPEG_QUALITY, 95])
+            
+            if success and os.path.exists(temp_path):
+                self.captured_photo_path = temp_path
+                self.window.destroy()
+                messagebox.showinfo("Success", "Photo captured successfully!")
+            else:
+                messagebox.showerror("Error", "Failed to save photo")
+                self.capture_btn.config(state='normal', text='CAPTURE PHOTO')
+                
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to capture photo: {e}")
+            self.capture_btn.config(state='normal', text='CAPTURE PHOTO')
     
     def cancel(self):
         """Cancel capture"""
@@ -407,5 +484,9 @@ class PhotoCaptureWindow:
     def cleanup_camera(self):
         """Clean up camera resources"""
         if self.cap:
-            self.cap.release()
-            self.cap = None
+            try:
+                self.cap.release()
+                self.cap = None
+                cv2.destroyAllWindows()
+            except:
+                pass
