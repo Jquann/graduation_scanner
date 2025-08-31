@@ -12,34 +12,34 @@ graduation_scanner/
 ├── models.py                  # Data models and structures
 ├── database.py                # Student data persistence
 ├── face_recognition.py        # Face recognition engine
-├── qr_manager.py             # QR code management
-├── camera_worker.py          # Camera and threading
-├── face_matching.py          # Face matching logic
+├── qr_manager.py              # QR code management
+├── camera_worker.py           # Camera and threading
+├── face_matching.py           # Face matching logic
 │
-├── gui/                      # GUI components
+├── gui/                       # GUI components
 │   ├── __init__.py
-│   ├── main_window.py        # Main application window
-│   ├── registration_tab.py   # Student registration interface
-│   ├── scanning_tab.py       # Real-time recognition interface
-│   ├── management_tab.py     # Student management interface
+│   ├── main_window.py         # Main application window
+│   ├── registration_tab.py    # Student registration interface
+│   ├── scanning_tab.py        # Real-time recognition interface
+│   ├── management_tab.py      # Student management interface
 │   └── certificate_display.py # Certificate ceremony display
 │
-├── DeepFaceModel/            # Anti-spoofing models
+├── DeepFaceModel/             # Anti-spoofing models
 │   ├── __init__.py
-│   ├── FasNet.py            # Fasnet anti-spoofing implementation
-│   ├── FasNetBackbone.py    # Fasnet model architecture
-│   ├── folder_utils.py      # Folder management utilities
-│   ├── logger.py            # Logging utilities
-│   ├── package_utils.py     # Package validation utilities
-│   └── weight_utils.py      # Model weight management
+│   ├── FasNet.py              # Fasnet anti-spoofing implementation
+│   ├── FasNetBackbone.py      # Fasnet model architecture
+│   ├── folder_utils.py        # Folder management utilities
+│   ├── logger.py              # Logging utilities
+│   ├── package_utils.py       # Package validation utilities
+│   └── weight_utils.py        # Model weight management
 │
 ├── graduation_data/          # Data directory (auto-created)
-│   ├── photos/              # Student photos
-│   ├── qrcodes/             # Generated QR codes
-│   └── students_data.json   # Student database
+│   ├── photos/               # Student photos
+│   ├── qrcodes/              # Generated QR codes
+│   └── students_data.json    # Student database
 │
 ├── requirements.txt          # Python dependencies
-└── README.md                # This file
+└── README.md                 # This file
 ```
 
 ## 🚀 Installation
@@ -241,7 +241,7 @@ python main.py --mode high_performance
 - Interactive feedback with contextual tips and instructions
 - Automatic attendance marking on successful recognition
 
-### **NEW: Certificate Display System**
+### **Certificate Display System**
 - **Professional Certificate Presentation**: Elegant, ceremony-ready certificate display
 - **Real-time Integration**: Automatic certificate display upon successful face recognition
 - **Fullscreen Ceremony Mode**: Perfect for projectors and large displays during graduations
